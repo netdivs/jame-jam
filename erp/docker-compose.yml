@@ -1,0 +1,17 @@
+# Local PostgreSQL for Jame Jam ERP (dev + test databases).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: jamejam-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jamejam
+      POSTGRES_PASSWORD: jamejam
+      POSTGRES_DB: jamejam
+    ports:
+      - "5433:5432"
+    volumes:
+      - jamejam-pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+volumes:
+  jamejam-pgdata:

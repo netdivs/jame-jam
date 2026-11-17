@@ -1,0 +1,560 @@
+// Jame Jam ERP — database schema
+// Spec: requirements/jame_jam_erp_system_technical_specification.md (v2.4)
+// Scope so far: Step 1 (foundation), Step 2 (masters), Step 3 (inventory core).
+// Money = Decimal(18,2). SQM = Decimal(18,4). Never use Float for either.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ───────────────────────────── Core / Admin ─────────────────────────────
+
+model User {
+  id           String           @id @default(cuid())
+  name         String
+  email        String           @unique
+  passwordHash String
+  roleId       String
+  role         Role             @relation(fields: [roleId], references: [id])
+  active       Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  sessions     Session[]
+  overrides    UserPermission[]
+  auditLogs    AuditLog[]
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  key         String           @unique // owner, manager, accountant, sales, storekeeper
+  name        String
+  description String?
+  system      Boolean          @default(false)
+  users       User[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  key         String           @id // e.g. "inventory.split"
+  module      String
+  description String
+  roles       RolePermission[]
+  users       UserPermission[]
+}
+
+model RolePermission {
+  roleId        String
+  permissionKey String
+  role          Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([roleId, permissionKey])
+}
+
+/// Per-user override on top of the role: grant=true adds, grant=false removes.
+model UserPermission {
+  userId        String
+  permissionKey String
+  grant         Boolean
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permission    Permission @relation(fields: [permissionKey], references: [key], onDelete: Cascade)
+
+  @@id([userId, permissionKey])
+}
+
+model Session {
+  id        String   @id // sha256 of the cookie token
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String // create, update, cancel, approve, reserve, release, split, adjust, login ...
+  entity    String
+  entityId  String?
+  before    Json?
+  after     Json?
+  meta      Json?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+}
+
+enum PriceMode {
+  INCLUSIVE
+  EXCLUSIVE
+}
+
+enum PoApprovalMode {
+  ALL
+  ABOVE_THRESHOLD
+  NONE
+}
+
+enum AllocationBasis {
+  SQM
+  VALUE
+  QUANTITY
+}
+
+/// Single row (id = 1). Never hardcode these values in code.
+model CompanySetting {
+  id                     Int             @id @default(1)
+  displayName            String          @default("Jame Jam")
+  legalName              String?
+  address                String?
+  trn                    String?
+  tradeLicenseNo         String?
+  phone                  String?
+  email                  String?
+  bankName               String?
+  bankBranch             String?
+  bankAccountNo          String?
+  iban                   String?
+  swift                  String?
+  vatRate                Decimal         @default(5) @db.Decimal(5, 2)
+  defaultPriceMode       PriceMode       @default(INCLUSIVE)
+  piValidityDays         Int             @default(15)
+  soReservationDays      Int             @default(15)
+  creditSalesEnabled     Boolean         @default(false)
+  poApprovalMode         PoApprovalMode  @default(ALL)
+  poApprovalThreshold    Decimal         @default(0) @db.Decimal(18, 2)
+  landedCostDefaultBasis AllocationBasis @default(SQM)
+  pdcReminderDays        Int             @default(7)
+  updatedAt              DateTime        @updatedAt
+}
+
+/// Gap-free numbering per document type and year: PREFIX-YYNNNN.
+model DocumentSequence {
+  docType    String
+  year       Int
+  prefix     String
+  lastNumber Int    @default(0)
+
+  @@id([docType, year])
+}
+
+// ───────────────────────────── Accounting core ─────────────────────────────
+
+enum AccountType {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+model Account {
+  id        String        @id @default(cuid())
+  code      String        @unique
+  name      String
+  type      AccountType
+  parentId  String?
+  parent    Account?      @relation("AccountTree", fields: [parentId], references: [id])
+  children  Account[]     @relation("AccountTree")
+  isGroup   Boolean       @default(false)
+  /// Stable key used by posting code (e.g. INVENTORY, AR, VAT_OUTPUT). Never post by code/name.
+  systemKey String?       @unique
+  active    Boolean       @default(true)
+  lines     JournalLine[]
+  createdAt DateTime      @default(now())
+}
+
+model FiscalYear {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  closed    Boolean  @default(false)
+  periods   Period[]
+}
+
+model Period {
+  id           String     @id @default(cuid())
+  fiscalYearId String
+  fiscalYear   FiscalYear @relation(fields: [fiscalYearId], references: [id])
+  year         Int
+  month        Int
+  locked       Boolean    @default(false)
+
+  @@unique([year, month])
+}
+
+model JournalEntry {
+  id          String        @id @default(cuid())
+  number      String        @unique
+  date        DateTime      @db.Date
+  sourceType  String // OPENING_STOCK, STOCK_ADJUSTMENT, SLAB_SPLIT, MANUAL ...
+  sourceId    String?
+  memo        String?
+  createdById String?
+  createdAt   DateTime      @default(now())
+  lines       JournalLine[]
+
+  @@index([sourceType, sourceId])
+  @@index([date])
+}
+
+model JournalLine {
+  id        String       @id @default(cuid())
+  entryId   String
+  entry     JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId String
+  account   Account      @relation(fields: [accountId], references: [id])
+  debit     Decimal      @default(0) @db.Decimal(18, 2)
+  credit    Decimal      @default(0) @db.Decimal(18, 2)
+  partyType String? // CUSTOMER, SUPPLIER
+  partyId   String?
+  memo      String?
+
+  @@index([accountId])
+  @@index([partyType, partyId])
+}
+
+enum TaxType {
+  SR
+  ZR
+  EX
+  OS
+  RC
+}
+
+model TaxCode {
+  id              String    @id @default(cuid())
+  code            String    @unique
+  name            String
+  type            TaxType
+  rate            Decimal   @db.Decimal(5, 2)
+  outputAccountId String?
+  inputAccountId  String?
+  active          Boolean   @default(true)
+  products        Product[]
+}
+
+// ───────────────────────────── Masters ─────────────────────────────
+
+model Warehouse {
+  id        String         @id @default(cuid())
+  code      String         @unique
+  name      String
+  location  String?
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now())
+  lots      Lot[]
+  slabs     Slab[]
+  balances  StockBalance[]
+}
+
+model Customer {
+  id               String   @id @default(cuid())
+  code             String   @unique
+  name             String
+  contactPerson    String?
+  mobile           String?
+  email            String?
+  address          String?
+  trn              String?
+  creditEnabled    Boolean  @default(false)
+  creditLimit      Decimal  @default(0) @db.Decimal(18, 2)
+  paymentTermsDays Int      @default(0)
+  notes            String?
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+enum SupplierType {
+  LOCAL
+  IMPORT
+}
+
+model Supplier {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  supplierType  SupplierType @default(LOCAL)
+  contactPerson String?
+  mobile        String?
+  email         String?
+  address       String?
+  trn           String?
+  notes         String?
+  active        Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  lots          Lot[]
+}
+
+enum ProductType {
+  TILE
+  SLAB
+}
+
+model Product {
+  id               String         @id @default(cuid())
+  itemCode         String         @unique
+  name             String
+  type             ProductType
+  category         String?
+  stoneType        String?
+  finish           String?
+  size             String? // tiles, e.g. "60x120"
+  thicknessMm      Decimal?       @db.Decimal(8, 2)
+  defaultTaxCodeId String?
+  defaultTaxCode   TaxCode?       @relation(fields: [defaultTaxCodeId], references: [id])
+  active           Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  lots             Lot[]
+  slabs            Slab[]
+  balances         StockBalance[]
+}
+
+model LandedCostCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  accountId String?
+  system    Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// ───────────────────────────── Inventory ─────────────────────────────
+// Hierarchy (approved): Lot → Block → Slab. Lot is the costing unit.
+
+enum LotSource {
+  OPENING
+  GRN
+}
+
+model Lot {
+  id              String           @id @default(cuid())
+  lotNo           String           @unique
+  productId       String
+  product         Product          @relation(fields: [productId], references: [id])
+  supplierId      String?
+  supplier        Supplier?        @relation(fields: [supplierId], references: [id])
+  warehouseId     String
+  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  source          LotSource
+  receivedDate    DateTime         @db.Date
+  totalSqm        Decimal          @db.Decimal(18, 4)
+  landedCostTotal Decimal          @db.Decimal(18, 2)
+  costPerSqm      Decimal          @db.Decimal(18, 4)
+  remarks         String?
+  createdById     String?
+  createdAt       DateTime         @default(now())
+  blocks          Block[]
+  slabs           Slab[]
+  balances        StockBalance[]
+  costHistory     LotCostHistory[]
+  movements       StockMovement[]
+}
+
+model Block {
+  id        String          @id @default(cuid())
+  blockNo   String
+  lotId     String
+  lot       Lot             @relation(fields: [lotId], references: [id])
+  origin    String?
+  remarks   String?
+  createdAt DateTime        @default(now())
+  slabs     Slab[]
+  balances  StockBalance[]
+  movements StockMovement[]
+
+  @@unique([lotId, blockNo])
+  @@unique([id, lotId]) // target of Slab's composite FK: guarantees slab.lotId = block.lotId
+}
+
+enum SlabStatus {
+  AVAILABLE
+  RESERVED
+  PARTIALLY_SOLD
+  SOLD
+  SPLIT
+  RETURNED
+  DAMAGED
+  REJECTED
+}
+
+model Slab {
+  id           String          @id @default(cuid())
+  slabNo       String          @unique
+  barcode      String          @unique
+  blockId      String
+  block        Block           @relation(fields: [blockId, lotId], references: [id, lotId])
+  /// Denormalised; equals block.lotId — enforced by the composite FK (blockId, lotId) → Block(id, lotId).
+  lotId        String
+  lot          Lot             @relation(fields: [lotId], references: [id])
+  productId    String
+  product      Product         @relation(fields: [productId], references: [id])
+  warehouseId  String
+  warehouse    Warehouse       @relation(fields: [warehouseId], references: [id])
+  lengthCm     Decimal         @db.Decimal(10, 2)
+  widthCm      Decimal         @db.Decimal(10, 2)
+  thicknessMm  Decimal?        @db.Decimal(8, 2)
+  totalSqm     Decimal         @db.Decimal(18, 4)
+  shade        String?
+  remarks      String?
+  status       SlabStatus      @default(AVAILABLE)
+  parentSlabId String?
+  parent       Slab?           @relation("SlabSplit", fields: [parentSlabId], references: [id])
+  children     Slab[]          @relation("SlabSplit")
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  balance      StockBalance?
+  operations   SlabOperation[]
+  movements    StockMovement[]
+
+  @@index([blockId])
+  @@index([lotId])
+}
+
+/// One row per stock bucket: a slab (slab products) or a lot/block (tiles).
+/// Available = onHandSqm − reservedSqm. Rows are locked (FOR UPDATE) before change.
+model StockBalance {
+  id           String             @id @default(cuid())
+  bucketKey    String             @unique
+  productId    String
+  product      Product            @relation(fields: [productId], references: [id])
+  lotId        String
+  lot          Lot                @relation(fields: [lotId], references: [id])
+  blockId      String?
+  block        Block?             @relation(fields: [blockId], references: [id])
+  slabId       String?            @unique
+  slab         Slab?              @relation(fields: [slabId], references: [id])
+  warehouseId  String
+  warehouse    Warehouse          @relation(fields: [warehouseId], references: [id])
+  onHandSqm    Decimal            @default(0) @db.Decimal(18, 4)
+  reservedSqm  Decimal            @default(0) @db.Decimal(18, 4)
+  updatedAt    DateTime           @updatedAt
+  reservations StockReservation[]
+  movements    StockMovement[]
+
+  @@index([productId])
+  @@index([lotId])
+}
+
+enum MovementType {
+  OPENING
+  GRN
+  DN
+  RETURN_IN
+  SPLIT_OUT
+  SPLIT_IN
+  WASTAGE
+  ADJUSTMENT_IN
+  ADJUSTMENT_OUT
+}
+
+/// Stock ledger. Stock is never edited directly; every change is a row here.
+model StockMovement {
+  id          String       @id @default(cuid())
+  date        DateTime     @db.Date
+  type        MovementType
+  refType     String
+  refId       String
+  balanceId   String
+  balance     StockBalance @relation(fields: [balanceId], references: [id])
+  productId   String
+  lotId       String
+  lot         Lot          @relation(fields: [lotId], references: [id])
+  blockId     String?
+  block       Block?       @relation(fields: [blockId], references: [id])
+  slabId      String?
+  slab        Slab?        @relation(fields: [slabId], references: [id])
+  warehouseId String
+  sqm         Decimal      @db.Decimal(18, 4) // signed: + in, − out
+  unitCost    Decimal      @db.Decimal(18, 4)
+  value       Decimal      @db.Decimal(18, 2) // signed
+  reason      String?
+  createdById String?
+  createdAt   DateTime     @default(now())
+
+  @@index([balanceId])
+  @@index([lotId])
+  @@index([slabId])
+  @@index([refType, refId])
+}
+
+enum ReservationStatus {
+  ACTIVE
+  CONSUMED
+  RELEASED
+  EXPIRED
+}
+
+model StockReservation {
+  id          String            @id @default(cuid())
+  balanceId   String
+  balance     StockBalance      @relation(fields: [balanceId], references: [id])
+  refType     String // SALES_ORDER
+  refId       String
+  refLineId   String?
+  sqm         Decimal           @db.Decimal(18, 4)
+  consumedSqm Decimal           @default(0) @db.Decimal(18, 4)
+  releasedSqm Decimal           @default(0) @db.Decimal(18, 4)
+  status      ReservationStatus @default(ACTIVE)
+  expiresAt   DateTime?
+  createdById String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([balanceId, status])
+  @@index([refType, refId])
+}
+
+enum SlabOperationType {
+  PARTIAL_SALE
+  FULL_SALE
+  SPLIT
+  WASTAGE
+  RETURN
+  ADJUSTMENT
+}
+
+model SlabOperation {
+  id           String            @id @default(cuid())
+  type         SlabOperationType
+  slabId       String
+  slab         Slab              @relation(fields: [slabId], references: [id])
+  refType      String?
+  refId        String?
+  sqm          Decimal           @db.Decimal(18, 4)
+  wastageSqm   Decimal           @default(0) @db.Decimal(18, 4)
+  childSlabIds String[]
+  notes        String?
+  userId       String?
+  createdAt    DateTime          @default(now())
+
+  @@index([slabId])
+}
+
+model LotCostHistory {
+  id              String   @id @default(cuid())
+  lotId           String
+  lot             Lot      @relation(fields: [lotId], references: [id])
+  date            DateTime @db.Date
+  source          String // OPENING, GRN, EXPENSE, OVERRIDE
+  amount          Decimal  @db.Decimal(18, 2)
+  costPerSqmAfter Decimal  @db.Decimal(18, 4)
+  reason          String?
+  userId          String?
+  createdAt       DateTime @default(now())
+
+  @@index([lotId])
+}

@@ -1,0 +1,102 @@
+@import "tailwindcss";
+
+/* Jame Jam ERP design tokens — light default, dark via OS or [data-theme="dark"].
+   Palette: ui-ux-pro-max "Analytics Dashboard" (blue primary, amber accent), tuned for dense data screens. */
+:root {
+  --bg: #f6f8fb;
+  --surface: #ffffff;
+  --surface-2: #f1f4f9;
+  --fg: #0f1b33;
+  --muted: #55627a;
+  --border: #dde3ec;
+  --primary: #1e40af;
+  --primary-hover: #1b3a9c;
+  --on-primary: #ffffff;
+  --accent: #b45309;
+  --success: #15803d;
+  --success-bg: #e8f6ee;
+  --warning: #a16207;
+  --warning-bg: #fdf6e3;
+  --danger: #b91c1c;
+  --danger-bg: #fdecec;
+  --info-bg: #e9effc;
+  --ring: #2563eb;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1120;
+    --surface: #111a2e;
+    --surface-2: #17223a;
+    --fg: #e6ecf7;
+    --muted: #9aa8c1;
+    --border: #26334f;
+    --primary: #5b8def;
+    --primary-hover: #7aa3f2;
+    --on-primary: #0b1120;
+    --accent: #f59e0b;
+    --success: #4ade80;
+    --success-bg: #12301f;
+    --warning: #facc15;
+    --warning-bg: #332a0c;
+    --danger: #f87171;
+    --danger-bg: #3a1616;
+    --info-bg: #16264a;
+    --ring: #7aa3f2;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1120;
+  --surface: #111a2e;
+  --surface-2: #17223a;
+  --fg: #e6ecf7;
+  --muted: #9aa8c1;
+  --border: #26334f;
+  --primary: #5b8def;
+  --primary-hover: #7aa3f2;
+  --on-primary: #0b1120;
+  --accent: #f59e0b;
+  --success: #4ade80;
+  --success-bg: #12301f;
+  --warning: #facc15;
+  --warning-bg: #332a0c;
+  --danger: #f87171;
+  --danger-bg: #3a1616;
+  --info-bg: #16264a;
+  --ring: #7aa3f2;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-info-bg: var(--info-bg);
+  --color-ring: var(--ring);
+  --font-sans: var(--font-inter);
+}
+
+html { color-scheme: light dark; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-inter), system-ui, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

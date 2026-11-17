@@ -1,0 +1,71 @@
+import { redirect } from "next/navigation";
+import { AppShell, type NavGroup } from "@/components/shell";
+import { logout, requireUser } from "@/server/auth";
+import { prisma } from "@/server/core";
+
+export const dynamic = "force-dynamic";
+
+async function logoutAction() {
+  "use server";
+  await logout();
+  redirect("/login");
+}
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireUser();
+  const has = (p: string) => user.ctx.permissions.has(p);
+  const settings = await prisma.companySetting.findUnique({ where: { id: 1 } });
+
+  const nav: NavGroup[] = [
+    { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
+    {
+      label: "Inventory",
+      items: has("inventory.view")
+        ? [
+            { href: "/inventory", label: "Stock summary", icon: "stock" },
+            { href: "/inventory/lots", label: "Lots & blocks", icon: "lots" },
+            { href: "/inventory/slabs", label: "Slabs", icon: "slabs" },
+            { href: "/inventory/movements", label: "Stock movements", icon: "movements" },
+          ]
+        : [],
+    },
+    {
+      label: "Masters",
+      items: [
+        ...(has("customers.view") ? [{ href: "/masters/customers", label: "Customers", icon: "customers" as const }] : []),
+        ...(has("suppliers.view") ? [{ href: "/masters/suppliers", label: "Suppliers", icon: "suppliers" as const }] : []),
+        ...(has("products.view") ? [{ href: "/masters/products", label: "Products", icon: "products" as const }] : []),
+        ...(has("warehouses.edit") ? [{ href: "/masters/warehouses", label: "Warehouses", icon: "warehouses" as const }] : []),
+        ...(has("landedCostCategories.edit")
+          ? [{ href: "/masters/landed-cost-categories", label: "Landed cost categories", icon: "landed" as const }]
+          : []),
+      ],
+    },
+    {
+      label: "Accounts",
+      items: has("accounts.view")
+        ? [
+            { href: "/accounts/chart", label: "Chart of accounts", icon: "coa" },
+            { href: "/accounts/journals", label: "Journal entries", icon: "journals" },
+            { href: "/accounts/periods", label: "Periods", icon: "periods" },
+          ]
+        : [],
+    },
+    {
+      label: "Administration",
+      items: [
+        ...(has("settings.view") ? [{ href: "/settings/company", label: "Company settings", icon: "company" as const }] : []),
+        ...(has("settings.view") ? [{ href: "/settings/tax-codes", label: "Tax codes", icon: "tax" as const }] : []),
+        ...(has("users.manage") ? [{ href: "/settings/users", label: "Users", icon: "users" as const }] : []),
+        ...(has("users.manage") ? [{ href: "/settings/roles", label: "Roles & permissions", icon: "roles" as const }] : []),
+        ...(has("audit.view") ? [{ href: "/audit", label: "Audit log", icon: "audit" as const }] : []),
+      ],
+    },
+  ].filter((g) => g.items.length > 0) as NavGroup[];
+
+  return (
+    <AppShell nav={nav} user={{ name: user.name, roleName: user.roleName }} company={settings?.displayName ?? "Jame Jam"} logoutAction={logoutAction}>
+      {children}
+    </AppShell>
+  );
+}

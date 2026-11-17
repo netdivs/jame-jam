@@ -1,0 +1,9 @@
+# Windows download metadata
+*:Zone.Identifier
+
+# Client business documents (invoices, etc.) — keep out of git
+requirements/*.pdf
+requirements/*.docx
+
+# Local Claude tooling
+.claude/
