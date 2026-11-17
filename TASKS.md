@@ -28,9 +28,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T4-13 | Production deployment of Step 4 | High | T4-11, user approval | BLOCKED (approval) | C + user | Backup verified; migration applied; base seed re-run; smoke test passes | smoke |
 | T4-14 | Client confirmation of C1, C5, C6, Q10 | High | — | BLOCKED (client) | user | Answers recorded in DECISIONS.md | — |
 | T4-15 | Leftover supplier advance (invoice < paid) — refund or offset path (F5) | Med | T8-03 | PLANNED | O | Advance can be refunded (PV refund) or applied to another PO of the same supplier | H R P G A |
-| T4-16 | Playwright E2E for the purchase flow (replaces the scripted HTTP walkthrough) | Med | TS-03 | Run the app in Asia/Dubai business time (`TZ=Asia/Dubai` on the app container, or explicit timezone in `today()`) (F18) | High | user approval (prod config) | READY | C | Dates after midnight Dubai are correct; test with a fixed clock | H |
-| TS-04 | Base-only seed for production (no demo users/stock, password required, role reset in one transaction) (F19, F20) | Med | — | READY | O | `npm run db:seed:base`; documented in deployment.md | H |
-| TQ-01 | PLANNED | F / K | Runs headless in CI against a disposable DB | E2E |
+| T4-16 | Playwright E2E for the purchase flow (replaces the scripted HTTP walkthrough) | Med | TQ-01 | PLANNED | F / K | Runs headless in CI against a disposable DB | E2E |
 
 ## Step 5 — Sales (SO, PI, TI) — see [PLAN.md](PLAN.md#step-5--sales-so-pi-ti)
 
@@ -108,6 +106,8 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T1-01 | Screen + service to manage per-user permission grants/revokes (F17) | Low | — | READY | O/K | `users.manage`; audited | P A |
 | TS-01 | Automated daily PostgreSQL backups with off-server copy and a tested restore | **Critical** | user approval (server) | BLOCKED (approval) | C + user | Restore drill documented | drill |
 | TS-02 | Security hardening: login rate limit, audit failed logins/logout, IP in audit log, security headers, non-root container | High | — | READY | O | [security-review.md](docs/engineering/security-review.md) items closed | R P |
+| TS-03 | Run the app in Asia/Dubai business time (`TZ=Asia/Dubai` on the app container, or explicit timezone in `today()`) (F18) | High | user approval (prod config) | READY | C | Dates after midnight Dubai are correct; test with a fixed clock | H |
+| TS-04 | Base-only seed for production (no demo users/stock, password required, role reset in one transaction) (F19, F20) | Med | — | READY | O | `npm run db:seed:base`; documented in deployment.md | H |
 | TQ-01 | CI pipeline (typecheck, lint, test with disposable Postgres, build, drift check) | High | — | READY | C | Runs on every push/PR | — |
 | TJ-01 | Scheduled job runner (PI expiry, SO expiry, PDC/CRM reminders) | High | — | PLANNED | C | Idempotent; runs as `systemCtx`; logged | H |
 | TX-01 | Choose PDF library (ADR) | Med | — | PLANNED | C | Entry in DECISIONS.md | — |
