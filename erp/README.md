@@ -30,3 +30,14 @@ npm test     # resets the jamejam_test database from migrations, then runs backe
 - Every stock + GL change for a document runs in one transaction (`inTx`). Stock rows are locked with `SELECT … FOR UPDATE`.
 - Posting code refers to accounts by `systemKey`, never by code or name.
 - Business settings live in `CompanySetting`, not in code.
+
+## Production (jame.netdivs.us)
+Server: aaPanel host, code at `/www/wwwroot/jame.netdivs.us`. App + PostgreSQL run in Docker
+(`docker-compose.prod.yml`, project `jamejam`); the app listens on `127.0.0.1:3010` and the aaPanel nginx vhost
+proxies the domain to it. Secrets are in `erp/.env.production` on the server (not in git). Migrations run on container start.
+
+Redeploy after pushing to `main`:
+```bash
+cd /www/wwwroot/jame.netdivs.us && git pull
+cd erp && docker compose -p jamejam --env-file .env.production -f docker-compose.prod.yml up -d --build
+```
