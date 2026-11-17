@@ -26,6 +26,11 @@ import {
   Grid3x3,
   ArrowLeftRight,
   CalendarClock,
+  ShoppingCart,
+  PackageCheck,
+  FileText,
+  Wallet,
+  Coins,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -51,6 +56,11 @@ const ICONS = {
   tax: Percent,
   audit: FileClock,
   company: Building2,
+  purchaseOrders: ShoppingCart,
+  grn: PackageCheck,
+  supplierInvoices: FileText,
+  supplierPayments: Wallet,
+  landedCosts: Coins,
 };
 
 function ThemeToggle() {

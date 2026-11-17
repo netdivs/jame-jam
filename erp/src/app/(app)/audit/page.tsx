@@ -5,7 +5,7 @@ import { fmtDateTime, titleCase } from "@/lib/format";
 
 export const metadata = { title: "Audit log" };
 
-const ENTITIES = ["Customer", "Supplier", "Product", "Warehouse", "LandedCostCategory", "Lot", "Slab", "StockBalance", "StockReservation", "JournalEntry", "Period", "CompanySetting", "User"];
+const ENTITIES = ["Customer", "Supplier", "Product", "Warehouse", "LandedCostCategory", "Lot", "Slab", "StockBalance", "StockReservation", "JournalEntry", "Period", "CompanySetting", "User", "PurchaseOrder", "Shipment", "GoodsReceipt", "SupplierInvoice", "SupplierPayment", "LandedCostExpense"];
 
 export default async function AuditPage({ searchParams }: { searchParams: Promise<{ entity?: string }> }) {
   await requirePermission("audit.view");

@@ -30,6 +30,21 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         : [],
     },
     {
+      label: "Purchase",
+      items: [
+        ...(has("purchase.view")
+          ? [
+              { href: "/purchase/orders", label: "Purchase orders", icon: "purchaseOrders" as const },
+              { href: "/purchase/grn", label: "Goods receipts", icon: "grn" as const },
+              { href: "/purchase/invoices", label: "Supplier invoices", icon: "supplierInvoices" as const },
+              { href: "/purchase/payments", label: "Supplier payments", icon: "supplierPayments" as const },
+            ]
+          : []),
+        // Landed cost is cost data: Owner, Manager, Accountant (spec §5).
+        ...(has("inventory.viewCost") ? [{ href: "/purchase/landed-costs", label: "Landed costs", icon: "landedCosts" as const }] : []),
+      ],
+    },
+    {
       label: "Masters",
       items: [
         ...(has("customers.view") ? [{ href: "/masters/customers", label: "Customers", icon: "customers" as const }] : []),
