@@ -23,7 +23,7 @@ export async function runAction(fn: (user: SessionUser) => Promise<string | void
   }
 }
 
-/** FormData → plain object (repeated keys become arrays). */
+/** FormData → plain object of string fields (a repeated key keeps its last value; send lists as a JSON `payload`). */
 export function formObject(fd: FormData): Record<string, string> {
   const o: Record<string, string> = {};
   for (const [k, v] of fd.entries()) if (typeof v === "string" && !k.startsWith("$ACTION")) o[k] = v;

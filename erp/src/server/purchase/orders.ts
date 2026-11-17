@@ -275,9 +275,11 @@ export async function setShipmentStatus(ctx: Ctx, shipmentId: string, status: Sh
   } else assertCan(ctx, "purchase.edit");
 
   return inTx(async (tx) => {
-    const sh = await tx.shipment.findUnique({ where: { id: shipmentId } });
-    if (!sh) throw new AppError("NOT_FOUND", "Shipment not found");
-    const po = await lockPo(tx, sh.purchaseOrderId);
+    const head = await tx.shipment.findUnique({ where: { id: shipmentId }, select: { purchaseOrderId: true } });
+    if (!head) throw new AppError("NOT_FOUND", "Shipment not found");
+    // Lock the PO first, then read the shipment, so two concurrent moves cannot both pass the forward-only check.
+    const po = await lockPo(tx, head.purchaseOrderId);
+    const sh = await tx.shipment.findUniqueOrThrow({ where: { id: shipmentId } });
     if (SHIPMENT_FLOW.indexOf(status) <= SHIPMENT_FLOW.indexOf(sh.status)) {
       throw new AppError("VALIDATION", `Shipment ${sh.number} is already ${sh.status.toLowerCase().replace(/_/g, " ")}`);
     }
