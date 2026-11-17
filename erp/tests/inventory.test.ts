@@ -5,9 +5,19 @@ import {
   adjustStock,
   availableSqm,
   consumeReservation,
+  postInventoryChange,
   releaseReservation,
   reserveStock,
 } from "../src/server/inventory/stock";
+import type { Ctx } from "../src/server/core";
+
+/** What the DN will do in step 6: consume the reservation and post COGS in one transaction. */
+const dispatch = (ctx: Ctx, a: { reservationId: string; sqm: string; refId: string }) =>
+  inTx(async (tx) => {
+    const r = await consumeReservation(tx, ctx, { ...a, date: today(), refType: "DN" });
+    await postInventoryChange(tx, ctx, { date: today(), sourceType: "DN", sourceId: a.refId, values: [r.cost.negated()], offsetAccount: "COGS" });
+    return r;
+  });
 import { inventoryReconciliation } from "../src/server/inventory/queries";
 import { ctxFor, makeProduct, slabLot, uid, warehouseId } from "./helpers";
 
@@ -153,7 +163,7 @@ describe("reservations", () => {
     const { slabs } = await slabLot(owner, 1, "100");
     const balId = slabs[0].balance!.id;
     const r1 = await inTx((tx) => reserveStock(tx, owner, { balanceId: balId, sqm: "0.75", refType: "SALES_ORDER", refId: "SO-E" }));
-    const sale1 = await inTx((tx) => consumeReservation(tx, owner, { reservationId: r1.id, sqm: "0.75", date: today(), refType: "DN", refId: "DN-E1" }));
+    const sale1 = await dispatch(owner, { reservationId: r1.id, sqm: "0.75", refId: "DN-E1" });
     expect(sale1.cost.toString()).toBe("75");
     const partly = await prisma.slab.findUniqueOrThrow({ where: { id: slabs[0].id }, include: { balance: true } });
     expect(partly.status).toBe("PARTIALLY_SOLD");
@@ -163,7 +173,7 @@ describe("reservations", () => {
     await expect(
       inTx((tx) => consumeReservation(tx, owner, { reservationId: r2.id, sqm: "1.3", date: today(), refType: "DN", refId: "DN-F0" })),
     ).rejects.toMatchObject({ code: "VALIDATION" });
-    await inTx((tx) => consumeReservation(tx, owner, { reservationId: r2.id, sqm: "1.25", date: today(), refType: "DN", refId: "DN-F1" }));
+    await dispatch(owner, { reservationId: r2.id, sqm: "1.25", refId: "DN-F1" });
     const slab = await prisma.slab.findUniqueOrThrow({ where: { id: slabs[0].id }, include: { balance: true, operations: true } });
     expect(slab.status).toBe("SOLD");
     expect(slab.operations.map((o) => o.type).sort()).toEqual(["FULL_SALE", "PARTIAL_SALE"]);

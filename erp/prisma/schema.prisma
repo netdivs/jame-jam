@@ -1,6 +1,6 @@
 // Jame Jam ERP — database schema
 // Spec: requirements/jame_jam_erp_system_technical_specification.md (v2.4)
-// Scope so far: Step 1 (foundation), Step 2 (masters), Step 3 (inventory core).
+// Scope so far: Step 1 (foundation), Step 2 (masters), Step 3 (inventory core), Step 4 (purchase & import).
 // Money = Decimal(18,2). SQM = Decimal(18,4). Never use Float for either.
 
 generator client {
@@ -233,15 +233,18 @@ enum TaxType {
 }
 
 model TaxCode {
-  id              String    @id @default(cuid())
-  code            String    @unique
+  id              String                @id @default(cuid())
+  code            String                @unique
   name            String
   type            TaxType
-  rate            Decimal   @db.Decimal(5, 2)
+  rate            Decimal               @db.Decimal(5, 2)
   outputAccountId String?
   inputAccountId  String?
-  active          Boolean   @default(true)
+  active          Boolean               @default(true)
   products        Product[]
+  poItems         PurchaseOrderItem[]
+  invoiceItems    SupplierInvoiceItem[]
+  expenses        LandedCostExpense[]
 }
 
 // ───────────────────────────── Masters ─────────────────────────────
@@ -256,6 +259,7 @@ model Warehouse {
   lots      Lot[]
   slabs     Slab[]
   balances  StockBalance[]
+  receipts  GoodsReceipt[]
 }
 
 model Customer {
@@ -282,20 +286,24 @@ enum SupplierType {
 }
 
 model Supplier {
-  id            String       @id @default(cuid())
-  code          String       @unique
+  id            String              @id @default(cuid())
+  code          String              @unique
   name          String
-  supplierType  SupplierType @default(LOCAL)
+  supplierType  SupplierType        @default(LOCAL)
   contactPerson String?
   mobile        String?
   email         String?
   address       String?
   trn           String?
   notes         String?
-  active        Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  active        Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
   lots          Lot[]
+  orders        PurchaseOrder[]
+  invoices      SupplierInvoice[]
+  payments      SupplierPayment[]
+  expenses      LandedCostExpense[]
 }
 
 enum ProductType {
@@ -304,32 +312,34 @@ enum ProductType {
 }
 
 model Product {
-  id               String         @id @default(cuid())
-  itemCode         String         @unique
+  id               String              @id @default(cuid())
+  itemCode         String              @unique
   name             String
   type             ProductType
   category         String?
   stoneType        String?
   finish           String?
   size             String? // tiles, e.g. "60x120"
-  thicknessMm      Decimal?       @db.Decimal(8, 2)
+  thicknessMm      Decimal?            @db.Decimal(8, 2)
   defaultTaxCodeId String?
-  defaultTaxCode   TaxCode?       @relation(fields: [defaultTaxCodeId], references: [id])
-  active           Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  defaultTaxCode   TaxCode?            @relation(fields: [defaultTaxCodeId], references: [id])
+  active           Boolean             @default(true)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
   lots             Lot[]
   slabs            Slab[]
   balances         StockBalance[]
+  poItems          PurchaseOrderItem[]
 }
 
 model LandedCostCategory {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id        String              @id @default(cuid())
+  name      String              @unique
   accountId String?
-  system    Boolean  @default(false)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  system    Boolean             @default(false)
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  expenses  LandedCostExpense[]
 }
 
 // ───────────────────────────── Inventory ─────────────────────────────
@@ -341,22 +351,30 @@ enum LotSource {
 }
 
 model Lot {
-  id              String           @id @default(cuid())
-  lotNo           String           @unique
+  id              String                 @id @default(cuid())
+  lotNo           String                 @unique
   productId       String
-  product         Product          @relation(fields: [productId], references: [id])
+  product         Product                @relation(fields: [productId], references: [id])
   supplierId      String?
-  supplier        Supplier?        @relation(fields: [supplierId], references: [id])
+  supplier        Supplier?              @relation(fields: [supplierId], references: [id])
   warehouseId     String
-  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  warehouse       Warehouse              @relation(fields: [warehouseId], references: [id])
   source          LotSource
-  receivedDate    DateTime         @db.Date
-  totalSqm        Decimal          @db.Decimal(18, 4)
-  landedCostTotal Decimal          @db.Decimal(18, 2)
-  costPerSqm      Decimal          @db.Decimal(18, 4)
+  receivedDate    DateTime               @db.Date
+  totalSqm        Decimal                @db.Decimal(18, 4)
+  landedCostTotal Decimal                @db.Decimal(18, 2)
+  costPerSqm      Decimal                @db.Decimal(18, 4)
   remarks         String?
+  /// Set for lots created by a goods receipt (GRN).
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?         @relation(fields: [purchaseOrderId], references: [id])
+  poItemId        String?
+  poItem          PurchaseOrderItem?     @relation(fields: [poItemId], references: [id])
+  goodsReceiptId  String?
+  goodsReceipt    GoodsReceipt?          @relation(fields: [goodsReceiptId], references: [id])
   createdById     String?
-  createdAt       DateTime         @default(now())
+  createdAt       DateTime               @default(now())
+  allocations     LandedCostAllocation[]
   blocks          Block[]
   slabs           Slab[]
   balances        StockBalance[]
@@ -459,6 +477,8 @@ enum MovementType {
   WASTAGE
   ADJUSTMENT_IN
   ADJUSTMENT_OUT
+  /// Value-only change (sqm = 0): landed cost allocation or supplier invoice price variance.
+  COST_ADJUSTMENT
 }
 
 /// Stock ledger. Stock is never edited directly; every change is a row here.
@@ -557,4 +577,297 @@ model LotCostHistory {
   createdAt       DateTime @default(now())
 
   @@index([lotId])
+}
+
+// ───────────────────────────── Purchase & Import (Step 4) ─────────────────────────────
+// Flow (C1, proposed and implemented): PO → approval → shipment (imports) → 100% payment, verified
+// → collection → GRN (stock in, lots created) → supplier invoice → landed cost allocation.
+
+enum PoStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+model PurchaseOrder {
+  id                  String              @id @default(cuid())
+  number              String              @unique
+  supplierId          String
+  supplier            Supplier            @relation(fields: [supplierId], references: [id])
+  date                DateTime            @db.Date
+  expectedDate        DateTime?           @db.Date
+  status              PoStatus            @default(DRAFT)
+  terms               String?
+  notes               String?
+  /// Reference only (never posted): original currency and rate.
+  refCurrency         String?
+  refRate             Decimal?            @db.Decimal(18, 6)
+  netTotal            Decimal             @default(0) @db.Decimal(18, 2)
+  /// VAT charged by the supplier (payable to them).
+  vatTotal            Decimal             @default(0) @db.Decimal(18, 2)
+  /// Reverse-charge VAT (imports): self-assessed, not paid to the supplier.
+  rcVatTotal          Decimal             @default(0) @db.Decimal(18, 2)
+  /// Amount payable to the supplier = net + vatTotal.
+  total               Decimal             @default(0) @db.Decimal(18, 2)
+  paidAmount          Decimal             @default(0) @db.Decimal(18, 2)
+  /// Payments not yet knocked off against a supplier invoice.
+  advanceBalance      Decimal             @default(0) @db.Decimal(18, 2)
+  paymentStatus       PaymentStatus       @default(UNPAID)
+  paymentVerifiedAt   DateTime?
+  paymentVerifiedById String?
+  submittedAt         DateTime?
+  approvedById        String?
+  approvedAt          DateTime?
+  rejectionNote       String?
+  cancelReason        String?
+  createdById         String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  items               PurchaseOrderItem[]
+  shipments           Shipment[]
+  receipts            GoodsReceipt[]
+  invoices            SupplierInvoice[]
+  payments            SupplierPayment[]
+  expenses            LandedCostExpense[]
+  lots                Lot[]
+
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id              String                @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  lineNo          Int
+  productId       String
+  product         Product               @relation(fields: [productId], references: [id])
+  description     String?
+  sqm             Decimal               @db.Decimal(18, 4)
+  /// AED per SQM, excl. VAT.
+  unitPrice       Decimal               @db.Decimal(18, 4)
+  taxCodeId       String
+  taxCode         TaxCode               @relation(fields: [taxCodeId], references: [id])
+  netAmount       Decimal               @db.Decimal(18, 2)
+  vatAmount       Decimal               @db.Decimal(18, 2)
+  receivedSqm     Decimal               @default(0) @db.Decimal(18, 4)
+  /// Inventory value booked by GRNs (credited to GRNI).
+  receivedValue   Decimal               @default(0) @db.Decimal(18, 2)
+  invoicedSqm     Decimal               @default(0) @db.Decimal(18, 4)
+  /// GRNI cleared by supplier invoices.
+  invoicedValue   Decimal               @default(0) @db.Decimal(18, 2)
+  receiptItems    GoodsReceiptItem[]
+  invoiceItems    SupplierInvoiceItem[]
+  lots            Lot[]
+
+  @@unique([purchaseOrderId, lineNo])
+}
+
+enum ShipmentStatus {
+  ORDERED
+  IN_TRANSIT
+  AT_PORT
+  COLLECTED
+  RECEIVED
+}
+
+model Shipment {
+  id              String              @id @default(cuid())
+  number          String              @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id])
+  reference       String?
+  billOfEntryNo   String?
+  containerNos    String?
+  eta             DateTime?           @db.Date
+  status          ShipmentStatus      @default(ORDERED)
+  collectedAt     DateTime?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  receipts        GoodsReceipt[]
+  expenses        LandedCostExpense[]
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceipt {
+  id              String             @id @default(cuid())
+  number          String             @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  shipmentId      String?
+  shipment        Shipment?          @relation(fields: [shipmentId], references: [id])
+  warehouseId     String
+  warehouse       Warehouse          @relation(fields: [warehouseId], references: [id])
+  date            DateTime           @db.Date
+  notes           String?
+  totalSqm        Decimal            @db.Decimal(18, 4)
+  totalValue      Decimal            @db.Decimal(18, 2)
+  createdById     String?
+  createdAt       DateTime           @default(now())
+  items           GoodsReceiptItem[]
+  lots            Lot[]
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceiptItem {
+  id             String            @id @default(cuid())
+  goodsReceiptId String
+  goodsReceipt   GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  poItemId       String
+  poItem         PurchaseOrderItem @relation(fields: [poItemId], references: [id])
+  lotId          String            @unique
+  sqm            Decimal           @db.Decimal(18, 4)
+  value          Decimal           @db.Decimal(18, 2)
+}
+
+model SupplierInvoice {
+  id                String                @id @default(cuid())
+  number            String                @unique
+  supplierId        String
+  supplier          Supplier              @relation(fields: [supplierId], references: [id])
+  purchaseOrderId   String
+  purchaseOrder     PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  supplierInvoiceNo String
+  date              DateTime              @db.Date
+  dueDate           DateTime?             @db.Date
+  netTotal          Decimal               @db.Decimal(18, 2)
+  vatTotal          Decimal               @db.Decimal(18, 2)
+  rcVatTotal        Decimal               @db.Decimal(18, 2)
+  /// Payable to the supplier = net + vatTotal.
+  total             Decimal               @db.Decimal(18, 2)
+  settledAmount     Decimal               @default(0) @db.Decimal(18, 2)
+  paymentStatus     PaymentStatus         @default(UNPAID)
+  refCurrency       String?
+  refAmount         Decimal?              @db.Decimal(18, 2)
+  refRate           Decimal?              @db.Decimal(18, 6)
+  notes             String?
+  createdById       String?
+  createdAt         DateTime              @default(now())
+  items             SupplierInvoiceItem[]
+
+  @@unique([supplierId, supplierInvoiceNo])
+  @@index([purchaseOrderId])
+}
+
+model SupplierInvoiceItem {
+  id         String            @id @default(cuid())
+  invoiceId  String
+  invoice    SupplierInvoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  poItemId   String
+  poItem     PurchaseOrderItem @relation(fields: [poItemId], references: [id])
+  sqm        Decimal           @db.Decimal(18, 4)
+  unitPrice  Decimal           @db.Decimal(18, 4)
+  taxCodeId  String
+  taxCode    TaxCode           @relation(fields: [taxCodeId], references: [id])
+  netAmount  Decimal           @db.Decimal(18, 2)
+  vatAmount  Decimal           @db.Decimal(18, 2)
+  /// GRNI cleared at PO price.
+  grniAmount Decimal           @db.Decimal(18, 2)
+  /// netAmount − grniAmount; posted to the lots of this PO line.
+  variance   Decimal           @db.Decimal(18, 2)
+}
+
+enum PaymentMode {
+  CASH
+  BANK
+}
+
+/// Payment voucher (PV) to a supplier: for a PO (goods) or for a landed cost bill.
+model SupplierPayment {
+  id                  String             @id @default(cuid())
+  number              String             @unique
+  supplierId          String
+  supplier            Supplier           @relation(fields: [supplierId], references: [id])
+  purchaseOrderId     String?
+  purchaseOrder       PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  landedCostExpenseId String?
+  landedCostExpense   LandedCostExpense? @relation(fields: [landedCostExpenseId], references: [id])
+  date                DateTime           @db.Date
+  amount              Decimal            @db.Decimal(18, 2)
+  mode                PaymentMode
+  reference           String?
+  notes               String?
+  /// Part held as a supplier advance (paid before the invoice).
+  toAdvance           Decimal            @default(0) @db.Decimal(18, 2)
+  /// Part applied to posted supplier invoices / bills.
+  toPayable           Decimal            @default(0) @db.Decimal(18, 2)
+  createdById         String?
+  createdAt           DateTime           @default(now())
+
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+}
+
+enum ExpenseStatus {
+  PENDING
+  ALLOCATED
+}
+
+model LandedCostExpense {
+  id              String                 @id @default(cuid())
+  number          String                 @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id])
+  shipmentId      String?
+  shipment        Shipment?              @relation(fields: [shipmentId], references: [id])
+  categoryId      String
+  category        LandedCostCategory     @relation(fields: [categoryId], references: [id])
+  supplierId      String
+  supplier        Supplier               @relation(fields: [supplierId], references: [id])
+  billNo          String
+  date            DateTime               @db.Date
+  /// Net amount (excl. VAT) — this is what is capitalised.
+  amount          Decimal                @db.Decimal(18, 2)
+  taxCodeId       String
+  taxCode         TaxCode                @relation(fields: [taxCodeId], references: [id])
+  vatAmount       Decimal                @db.Decimal(18, 2)
+  /// Payable to the service supplier = amount + VAT (unless reverse charge).
+  total           Decimal                @db.Decimal(18, 2)
+  paidAmount      Decimal                @default(0) @db.Decimal(18, 2)
+  paymentStatus   PaymentStatus          @default(UNPAID)
+  allocationBasis AllocationBasis        @default(SQM)
+  /// Optional: allocate only to these lots (must belong to the PO).
+  restrictLotIds  String[]
+  status          ExpenseStatus          @default(PENDING)
+  allocatedAt     DateTime?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime               @default(now())
+  allocations     LandedCostAllocation[]
+  payments        SupplierPayment[]
+
+  @@unique([supplierId, billNo])
+  @@index([purchaseOrderId])
+}
+
+model LandedCostAllocation {
+  id               String            @id @default(cuid())
+  expenseId        String
+  expense          LandedCostExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  lotId            String
+  lot              Lot               @relation(fields: [lotId], references: [id])
+  basisValue       Decimal           @db.Decimal(18, 4)
+  allocatedAmount  Decimal           @db.Decimal(18, 2)
+  /// Part added to remaining stock.
+  inventoryAmount  Decimal           @db.Decimal(18, 2)
+  /// Part for SQM already sold / consumed (to COGS).
+  cogsAmount       Decimal           @db.Decimal(18, 2)
+  isManualOverride Boolean           @default(false)
+  overrideReason   String?
+  createdAt        DateTime          @default(now())
+
+  @@unique([expenseId, lotId])
 }

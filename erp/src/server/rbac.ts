@@ -26,6 +26,16 @@ export const PERMISSIONS = {
   "inventory.split": "Split (cut) slabs",
   "inventory.adjust": "Post stock adjustments (breakage, wastage, count)",
   "inventory.editSlabSqm": "Override auto-calculated slab SQM",
+  // Purchase & import
+  "purchase.view": "View purchase orders, shipments, GRNs and supplier invoices",
+  "purchase.edit": "Create / edit / submit purchase orders and update shipments",
+  "purchase.approve": "Approve or reject purchase orders",
+  "purchase.receive": "Receive goods (GRN) and enter slabs",
+  "purchase.invoice": "Post supplier invoices",
+  "purchase.verifyPayment": "Verify that a PO is 100% paid (unblocks collection and GRN)",
+  "payments.supplier": "Record supplier payments (PV)",
+  "landedCost.edit": "Record and allocate landed cost expenses",
+  "landedCost.override": "Manually override landed cost allocation",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -43,7 +53,8 @@ export const ROLES: { key: string; name: string; description: string; permission
     key: "manager",
     name: "Manager",
     description: "Runs operations; approves returns and POs",
-    permissions: ALL.filter((p) => !["settings.edit", "users.manage", "accounts.periodLock"].includes(p)),
+    // Spec §5: Manager only views payments.
+    permissions: ALL.filter((p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier"].includes(p)),
   },
   {
     key: "accountant",
@@ -60,6 +71,12 @@ export const ROLES: { key: string; name: string; description: string; permission
       "products.view",
       "inventory.view",
       "inventory.viewCost",
+      "purchase.view",
+      "purchase.edit",
+      "purchase.invoice",
+      "purchase.verifyPayment",
+      "payments.supplier",
+      "landedCost.edit",
     ],
   },
   {
@@ -78,6 +95,8 @@ export const ROLES: { key: string; name: string; description: string; permission
       "inventory.view",
       "inventory.openingStock",
       "inventory.split",
+      "purchase.view",
+      "purchase.receive",
     ],
   },
 ];

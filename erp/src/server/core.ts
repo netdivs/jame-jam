@@ -112,6 +112,8 @@ export const DOC_PREFIX: Record<string, string> = {
   PO: "PO",
   GRN: "GRN",
   PUR: "PUR",
+  SHP: "SHP",
+  LCE: "LCE",
 };
 
 /**

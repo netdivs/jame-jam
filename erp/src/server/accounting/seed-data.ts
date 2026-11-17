@@ -31,6 +31,7 @@ export const CHART_OF_ACCOUNTS: Acc[] = [
         { code: "2110", name: "Accounts Payable", type: "LIABILITY", key: "AP" },
         { code: "2120", name: "PDC Payable", type: "LIABILITY", key: "PDC_PAYABLE" },
         { code: "2130", name: "Customer Advances", type: "LIABILITY", key: "CUSTOMER_ADVANCES" },
+        { code: "2140", name: "Goods Received Not Invoiced", type: "LIABILITY", key: "GRNI" },
       ] },
       { code: "2200", name: "Tax Liabilities", type: "LIABILITY", children: [
         { code: "2210", name: "VAT Output", type: "LIABILITY", key: "VAT_OUTPUT" },
