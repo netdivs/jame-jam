@@ -1,0 +1,33 @@
+# Production stack: PostgreSQL + app. Secrets come from .env.production (not in git).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: jamejam-prod-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jamejam
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: jamejam
+    volumes:
+      - jamejam-prod-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jamejam -d jamejam"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build: .
+    container_name: jamejam-prod-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://jamejam:${POSTGRES_PASSWORD}@db:5432/jamejam?schema=public
+      SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+    ports:
+      - "127.0.0.1:${APP_PORT:-3010}:3000"
+
+volumes:
+  jamejam-prod-pgdata:
