@@ -16,7 +16,11 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - Migration `20261117161423_purchase_import` (additive).
 - Tests: 21 purchase tests (46 in total).
 
+### Added — testing
+- Playwright browser E2E (`npm run test:e2e`): the full purchase flow on desktop and mobile.
+
 ### Fixed
+- Mobile layout: the landed cost preview shows the key columns first; the override form fits a phone; form messages span grid forms.
 - A shipment-linked landed cost bill was spread over every lot of the PO. It is now allocated only to the lots received on that shipment (TD-010).
 - Landed cost allocation now locks the PO before the bill, so a concurrent GRN cannot add a lot it misses (TD-012).
 - After allocation, the PO, landed cost and inventory screens refresh.

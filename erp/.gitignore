@@ -42,3 +42,7 @@ next-env.d.ts
 
 .env
 !.env.example
+
+# Playwright output
+/e2e/.artifacts/
+/e2e/.report/

@@ -70,3 +70,30 @@ Paste the actual output in the worker report ([code-review.md](code-review.md#de
 | No tests for `auth.ts` (login, expiry, inactive user) | Unit tests with a stubbed cookie store, or E2E |
 | No coverage reporting | `vitest --coverage` once a provider is approved |
 | Reports and jobs (future) | Each report: totals reconcile to GL; each job: idempotent on double run |
+
+## Browser E2E (Playwright)
+
+**Implemented (17 Nov 2026).** Playwright `1.64.1` (pinned) with Chromium. Config: `erp/playwright.config.ts`; specs: `erp/e2e/*.spec.ts`; output: `erp/e2e/.artifacts` and `erp/e2e/.report` (git-ignored).
+
+- **Projects:** `desktop` (Desktop Chrome, 1366×800) and `mobile` (Pixel 7). One worker, serial, because they share one database.
+- **Server:** the config starts `next start` on port 3105, so run `npm run build` first.
+- **Database:** `E2E_DATABASE_URL` must name a `*_e2e` database (the config refuses anything else). It is never reset, and every run uses unique document tags, so runs accumulate data. Prepare it once:
+  ```bash
+  createdb jamejam_e2e   # e.g. docker exec jamejam-db psql -U jamejam -d postgres -c "CREATE DATABASE jamejam_e2e"
+  DATABASE_URL=$E2E_DATABASE_URL npx prisma migrate deploy
+  SEED_PASSWORD=<local value> DATABASE_URL=$E2E_DATABASE_URL npx prisma db seed
+  ```
+- **Run:** `E2E_DATABASE_URL=… E2E_PASSWORD=<seed password> npm run test:e2e`. Failures keep a trace (`npx playwright show-trace …`).
+- **Covered:** `purchase-flow.spec.ts` runs the full Step 4 flow as sales, accountant, manager and storekeeper:
+  - access denial;
+  - a 2-line import PO, submit and approve;
+  - 2 shipments;
+  - a partial payment that blocks collection, a blocked over-payment, then verification;
+  - a GRN per shipment;
+  - an invoice with a price increase;
+  - landed cost bills;
+  - the shipment-scoped preview, allocation and bill payment;
+  - a manual override;
+  - dashboard reconciliation.
+- **WSL without root:** Chromium needs `libnss3`, `libnspr4` and `libasound2`. Install them with `sudo npx playwright install-deps chromium`. Without sudo, `apt-get download` the packages, extract them with `dpkg-deb -x` into `~/.cache/ms-playwright/local-deps/root`, and export `LD_LIBRARY_PATH=$HOME/.cache/ms-playwright/local-deps/root/usr/lib/x86_64-linux-gnu`.
+- **Not yet:** running in CI (TQ-01).

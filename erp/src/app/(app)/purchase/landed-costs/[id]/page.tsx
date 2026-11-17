@@ -139,11 +139,11 @@ export default async function LandedCostDetail({ params }: { params: Promise<{ i
                 <thead>
                   <tr>
                     <th>Lot</th>
-                    <th>Product</th>
-                    <th className="num">SQM received</th>
+                    <th className="hidden sm:table-cell">Product</th>
+                    <th className="num hidden md:table-cell">SQM received</th>
                     <th className="num">SQM in stock</th>
-                    <th className="num">Basis value</th>
-                    <th className="num">Share</th>
+                    <th className="num hidden md:table-cell">Basis value</th>
+                    <th className="num hidden md:table-cell">Share</th>
                     <th className="num">Allocated (AED)</th>
                     <th className="num">→ Inventory</th>
                     <th className="num">→ COGS</th>
@@ -154,19 +154,25 @@ export default async function LandedCostDetail({ params }: { params: Promise<{ i
                     <tr key={r.lotId}>
                       <td className="whitespace-nowrap">
                         <Link href={`/inventory/lots/${r.lotId}`} className="font-medium text-primary hover:underline">{r.lotNo}</Link>
+                        <div className="whitespace-normal text-xs text-muted sm:hidden">{r.productName}</div>
                       </td>
-                      <td>{r.productName}</td>
-                      <td className="num">{fmtSqm(r.sqm)}</td>
+                      <td className="hidden sm:table-cell">{r.productName}</td>
+                      <td className="num hidden md:table-cell">{fmtSqm(r.sqm)}</td>
                       <td className="num">{fmtSqm(r.remaining)}</td>
-                      <td className="num">{fmtBasis(exp.allocationBasis, r.basisValue)}</td>
-                      <td className="num">{basisOk ? `${fmtMoney(r.basisValue.div(basisTotal).times(100))}%` : "—"}</td>
+                      <td className="num hidden md:table-cell">{fmtBasis(exp.allocationBasis, r.basisValue)}</td>
+                      <td className="num hidden md:table-cell">{basisOk ? `${fmtMoney(r.basisValue.div(basisTotal).times(100))}%` : "—"}</td>
                       <td className="num font-medium">{fmtMoney(r.amount)}</td>
                       <td className="num">{fmtMoney(r.inventory)}</td>
                       <td className="num">{fmtMoney(r.cogs)}</td>
                     </tr>
                   ))}
                   <tr className="font-semibold">
-                    <td colSpan={6}>Total</td>
+                    <td>Total</td>
+                    <td className="hidden sm:table-cell" />
+                    <td className="hidden md:table-cell" />
+                    <td />
+                    <td className="hidden md:table-cell" />
+                    <td className="hidden md:table-cell" />
                     <td className="num">{fmtMoney(sum(previewRows.map((r) => r.amount)))}</td>
                     <td className="num">{fmtMoney(sum(previewRows.map((r) => r.inventory)))}</td>
                     <td className="num">{fmtMoney(previewCogs)}</td>

@@ -34,11 +34,11 @@ export function OverrideForm({ expenseId, expenseAmount, rows }: { expenseId: st
         Enter the amount for each lot. The amounts must add up to the expense (AED {fmtFils(target)}) exactly. The reason is stored with the allocation and in the audit log.
       </p>
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[420px] text-sm">
+        <table className="w-full text-sm">
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-muted">
               <th className="py-2 pr-3">Lot</th>
-              <th className="w-44 py-2 text-right">Amount (AED)</th>
+              <th className="w-32 py-2 text-right sm:w-44">Amount (AED)</th>
             </tr>
           </thead>
           <tbody>

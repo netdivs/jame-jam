@@ -56,6 +56,7 @@ Run all of these from `erp/`:
 | `npm run lint` | ESLint |
 | `npm test` | **resets `jamejam_test`** from migrations, then runs Vitest. AI agents must get the user's consent first (see [AGENTS.md §10](AGENTS.md#10-testing)) |
 | `npm run build` | production build |
+| `npm run test:e2e` | Playwright browser tests (desktop + mobile) against the production build and a dedicated `*_e2e` database; see [testing-strategy.md](docs/engineering/testing-strategy.md#browser-e2e-playwright) |
 | `npm run db:migrate` | create a migration on the dev DB (`prisma migrate dev`) |
 | `npm run db:deploy` | apply migrations |
 | `npm run db:seed` | idempotent base and demo seed |

@@ -28,7 +28,7 @@
 - Inventory: 15
 - Purchase: 21
 
-**Quality gates (17 Nov 2026):** typecheck ✅ · lint ✅ (0 problems) · tests ✅ 46/46 · `next build` ✅ · migration drift ✅ none · HTTP workflow walkthrough ✅ 78/78. There is no CI and no browser E2E yet.
+**Quality gates (17 Nov 2026):** typecheck ✅ · lint ✅ (0 problems) · tests ✅ 46/46 · `next build` ✅ · migration drift ✅ none · HTTP walkthrough ✅ 78/78 · Playwright E2E ✅ 2/2 (desktop and mobile). There is no CI yet.
 
 The verified audit behind this file is [docs/audit/2026-11-17-repository-audit.md](docs/audit/2026-11-17-repository-audit.md). Tasks: [TASKS.md](TASKS.md). Decisions: [DECISIONS.md](DECISIONS.md).
 
@@ -267,10 +267,15 @@ It ended with these reconciliations, all passing:
 - total debits = credits;
 - lot landed cost = invoice net + bills (VAT excluded).
 
-78/78 checks passed. No interactive browser was available, so a visual check on a desktop and a phone is still open (T4-11).
+78/78 checks passed.
+
+**Browser verification (T4-11):** Playwright 1.64.1 (Chromium) drives the same flow through the real JavaScript UI as 5 roles, on Desktop Chrome (1366×800) and a Pixel 7. Both pass (`npm run test:e2e`). The screenshots were reviewed, and three layout issues were fixed:
+- the mobile allocation preview now shows lot, SQM in stock and the allocated amount first;
+- the override form fits a phone screen;
+- form messages span the full width of grid forms.
 
 **Still open:**
-1. T4-11: the user's visual run-through in a browser (desktop and mobile).
+1. Optional: the owner's personal look at the screens before the demo.
 2. T4-12 (optional, for the demo): demo purchase data.
 3. T4-13: deployment, after explicit approval and a verified backup. Afterwards re-run the base seed on the server so roles get the new permissions and the GRNI account is created. See [docs/engineering/deployment.md](docs/engineering/deployment.md).
 4. T4-14: client confirmation of C1, C5, C6 and Q10.

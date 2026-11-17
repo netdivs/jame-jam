@@ -26,7 +26,7 @@ export function ActionForm({
       {state.message && (
         <div
           role={state.ok ? "status" : "alert"}
-          className={`mb-4 rounded-md border px-3 py-2 text-sm ${state.ok ? "border-success/30 bg-success-bg text-success" : "border-danger/30 bg-danger-bg text-danger"}`}
+          className={`col-span-full mb-4 rounded-md border px-3 py-2 text-sm ${state.ok ? "border-success/30 bg-success-bg text-success" : "border-danger/30 bg-danger-bg text-danger"}`}
         >
           {state.message}
         </div>
