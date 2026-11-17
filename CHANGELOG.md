@@ -1,0 +1,33 @@
+# Changelog
+
+All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai time.
+
+## [Unreleased]
+
+### Added — Step 4 Purchase & Import (not deployed)
+- Purchase orders with a configurable approval rule (C6 proposal), rejection to draft, and cancellation.
+- Shipments: Ordered → In Transit → At Port → Collected → Received.
+- Supplier payments (PV) with supplier advances and payment verification. The 100% verified payment gate on collection and GRN implements the C1 proposal.
+- Goods receipts creating lots, blocks and slabs (Dr Inventory / Cr GRNI). Supplier invoices clear GRNI and post the price variance to the lot or to COGS; reverse charge VAT is supported.
+- Landed cost bills for all 10 categories, allocated by SQM, value or quantity (C5 proposal). Manual override needs a permission and a reason. A late expense sends the sold share to COGS.
+- Landed cost list and detail screens: allocation preview with the inventory/COGS split, manual override form, bill payment form, and the related accounting entries.
+- "Purchase" sidebar group.
+- New permissions: `purchase.*`, `payments.supplier`, `landedCost.edit`, `landedCost.override`. New account 2140 GRNI.
+- Migration `20261117161423_purchase_import` (additive).
+- Tests: 21 purchase tests (46 in total).
+
+### Fixed
+- A shipment-linked landed cost bill was spread over every lot of the PO. It is now allocated only to the lots received on that shipment (TD-010).
+- Landed cost allocation now locks the PO before the bill, so a concurrent GRN cannot add a lot it misses (TD-012).
+- After allocation, the PO, landed cost and inventory screens refresh.
+- Landed cost amounts on the PO page are hidden from roles without cost access.
+- The audit log filter now includes purchase documents.
+
+### Documentation and agent foundation
+- Added AGENTS.md, CLAUDE.md, PLAN.md, TASKS.md, DECISIONS.md, CONTRIBUTING.md, SECURITY.md and the repository audit.
+- Added business, architecture and engineering docs under `docs/`; agent profiles under `agents/`; portable skills under `skills/`.
+
+## 2026-11-17 — Steps 1–3 (deployed)
+- `d044379` Document production deploy.
+- `16d7226` Docker production setup (app + PostgreSQL).
+- `4d32d1c` Foundation, masters, inventory core (Lot → Block → Slab, reservations, splits, adjustments, opening stock).
