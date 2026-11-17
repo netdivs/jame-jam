@@ -22,6 +22,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T4-08 | Hide landed cost amounts on PO page from roles without cost access; add purchase entities to `/audit` filter (F14) | Low | — | DONE | C | Storekeeper does not see the landed cost card | HTTP |
 | T4-09 | Quality gates: typecheck, lint, tests, build, migration drift | High | T4-01…08 | DONE | C | All green (see DEVELOPMENT_STATUS.md) | — |
 | T4-10 | Workflow verification (no-JS HTTP walkthrough of the real forms, 5 roles) | High | T4-09 | DONE | C | 78/78 checks incl. reconciliation | — |
+| T4-17 | Frontend review by Kilo (read-only, delegated as T4-REVIEW-UI): 8 findings, 0 high; applied #1, #2, #4, #5 (override form a11y, basis formatting); #3 invalid (Decimal prints no trailing zeros); #6–#8 match existing app-wide patterns, kept as design-system notes | Low | T4-03 | DONE | K → C | Findings triaged; walkthrough still 78/78 | build, HTTP |
 | T4-11 | Interactive browser run-through on a desktop and a phone | High | T4-10 | READY | User / K | Owner signs off the flow visually; issues logged | manual |
 | T4-12 | Demo data: one import PO through every status, all 10 landed cost categories, local PO | Med | T4-09 | PLANNED | O / C | Idempotent seed step; skipped when purchase data exists | H |
 | T4-13 | Production deployment of Step 4 | High | T4-11, user approval | BLOCKED (approval) | C + user | Backup verified; migration applied; base seed re-run; smoke test passes | smoke |

@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ActionForm, FInput, FSelect, SubmitButton } from "@/components/forms";
 import { Card, DefList, Empty, PageHeader, Stat, Table } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
-import { D, ZERO, prisma, sum } from "@/server/core";
+import { D, ZERO, prisma, sum, type Dec } from "@/server/core";
 import { inventoryShare } from "@/server/inventory/costing";
 import { previewAllocation } from "@/server/purchase/landed-cost";
 import { fmtAED, fmtDate, fmtDateTime, fmtMoney, fmtSqm, titleCase, todayIso } from "@/lib/format";
@@ -12,6 +12,8 @@ import { ExpStatus, PayStatus, ShipStatus } from "../../shared";
 import { OverrideForm } from "./override-form";
 
 const BASIS_LABEL = { SQM: "SQM", VALUE: "Purchase value", QUANTITY: "Quantity (slabs)" } as const;
+/** Basis values in the unit of their basis: SQM (2 dp shown), AED, or a whole count. */
+const fmtBasis = (b: keyof typeof BASIS_LABEL, v: Dec) => (b === "VALUE" ? fmtMoney(v) : b === "SQM" ? fmtSqm(v) : v.toFixed(0));
 
 // Landed cost is cost data (spec §5: Owner, Manager, Accountant only), so the screen needs inventory.viewCost.
 export default async function LandedCostDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -156,7 +158,7 @@ export default async function LandedCostDetail({ params }: { params: Promise<{ i
                       <td>{r.productName}</td>
                       <td className="num">{fmtSqm(r.sqm)}</td>
                       <td className="num">{fmtSqm(r.remaining)}</td>
-                      <td className="num">{exp.allocationBasis === "VALUE" ? fmtMoney(r.basisValue) : exp.allocationBasis === "SQM" ? fmtSqm(r.basisValue) : r.basisValue.toString()}</td>
+                      <td className="num">{fmtBasis(exp.allocationBasis, r.basisValue)}</td>
                       <td className="num">{basisOk ? `${fmtMoney(r.basisValue.div(basisTotal).times(100))}%` : "—"}</td>
                       <td className="num font-medium">{fmtMoney(r.amount)}</td>
                       <td className="num">{fmtMoney(r.inventory)}</td>
@@ -206,7 +208,7 @@ export default async function LandedCostDetail({ params }: { params: Promise<{ i
                     <Link href={`/inventory/lots/${a.lotId}`} className="font-medium text-primary hover:underline">{a.lot.lotNo}</Link>
                   </td>
                   <td>{a.lot.product.name}</td>
-                  <td className="num">{D(a.basisValue).toString()}</td>
+                  <td className="num">{fmtBasis(exp.allocationBasis, D(a.basisValue))}</td>
                   <td className="num font-medium">{fmtMoney(a.allocatedAmount)}</td>
                   <td className="num">{fmtMoney(a.inventoryAmount)}</td>
                   <td className="num">{fmtMoney(a.cogsAmount)}</td>

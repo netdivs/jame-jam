@@ -19,6 +19,7 @@ const fmtFils = (f: number) => `${f < 0 ? "-" : ""}${Math.floor(Math.abs(f) / 10
 export function OverrideForm({ expenseId, expenseAmount, rows }: { expenseId: string; expenseAmount: string; rows: Row[] }) {
   const [amounts, setAmounts] = useState(() => Object.fromEntries(rows.map((r) => [r.lotId, r.amount])));
   const [reason, setReason] = useState("");
+  const [touched, setTouched] = useState(false);
   const target = toFils(expenseAmount) ?? 0;
   const parsed = rows.map((r) => toFils(amounts[r.lotId] ?? ""));
   const valid = parsed.every((f) => f !== null);
@@ -48,11 +49,20 @@ export function OverrideForm({ expenseId, expenseAmount, rows }: { expenseId: st
                   <input
                     aria-label={`Amount for ${r.label}`}
                     aria-invalid={parsed[i] === null}
+                    aria-describedby={parsed[i] === null ? `override-err-${i}` : undefined}
                     inputMode="decimal"
                     className={`${inputClass} text-right`}
                     value={amounts[r.lotId] ?? ""}
-                    onChange={(e) => setAmounts((a) => ({ ...a, [r.lotId]: e.target.value }))}
+                    onChange={(e) => {
+                      setTouched(true);
+                      setAmounts((a) => ({ ...a, [r.lotId]: e.target.value }));
+                    }}
                   />
+                  {parsed[i] === null && (
+                    <span id={`override-err-${i}`} className="mt-1 block text-right text-xs text-danger">
+                      Number with at most 2 decimals
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -63,14 +73,14 @@ export function OverrideForm({ expenseId, expenseAmount, rows }: { expenseId: st
           </tbody>
         </table>
       </div>
-      <p role="status" className={`text-sm ${valid && diff === 0 ? "text-success" : "text-warning"}`}>
+      <p role={touched ? "status" : undefined} className={`text-sm ${valid && diff === 0 ? "text-success" : "text-warning"}`}>
         {!valid ? "Each amount must be a number with at most 2 decimals." : diff === 0 ? "Amounts add up to the expense." : `${diff > 0 ? "Still to allocate" : "Over-allocated by"} AED ${fmtFils(Math.abs(diff))}.`}
       </p>
       <div>
         <label htmlFor="override-reason" className="mb-1 block text-xs font-medium text-fg">
           Reason <span className="text-danger">*</span>
         </label>
-        <input id="override-reason" className={inputClass} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Container 2 carried only the Calacatta blocks" />
+        <input id="override-reason" required aria-required="true" className={inputClass} maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Container 2 carried only the Calacatta blocks" />
       </div>
       <SubmitButton variant="secondary" pendingText="Allocating…">Allocate manually</SubmitButton>
     </ActionForm>
