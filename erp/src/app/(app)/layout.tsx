@@ -67,13 +67,23 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     },
     {
       label: "Accounts",
-      items: has("accounts.view")
-        ? [
-            { href: "/accounts/chart", label: "Chart of accounts", icon: "coa" },
-            { href: "/accounts/journals", label: "Journal entries", icon: "journals" },
-            { href: "/accounts/periods", label: "Periods", icon: "periods" },
-          ]
-        : [],
+      items: [
+        ...(has("accounts.view")
+          ? [
+              { href: "/accounts/chart", label: "Chart of accounts", icon: "coa" as const },
+              { href: "/accounts/journals", label: "Journal entries", icon: "journals" as const },
+              { href: "/accounts/banks", label: "Bank accounts", icon: "banks" as const },
+            ]
+          : []),
+        ...(has("reports.financial")
+          ? [
+              { href: "/accounts/trial-balance", label: "Trial balance", icon: "reports" as const },
+              { href: "/accounts/profit-loss", label: "Profit & loss", icon: "reports" as const },
+              { href: "/accounts/balance-sheet", label: "Balance sheet", icon: "reports" as const },
+            ]
+          : []),
+        ...(has("accounts.view") ? [{ href: "/accounts/periods", label: "Periods", icon: "periods" as const }] : []),
+      ],
     },
     {
       label: "Administration",

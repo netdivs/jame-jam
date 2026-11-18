@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ActionForm, FInput, FSelect, SubmitButton } from "@/components/forms";
+import { ActionForm, FInput, SubmitButton } from "@/components/forms";
 import { Card, DefList, Empty, PageHeader, Stat, Table } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
+import { PaidFromSelect } from "@/components/paid-from";
 import { D, ZERO, prisma, sum, type Dec } from "@/server/core";
 import { inventoryShare } from "@/server/inventory/costing";
 import { previewAllocation } from "@/server/purchase/landed-cost";
@@ -283,7 +284,7 @@ export default async function LandedCostDetail({ params }: { params: Promise<{ i
               <input type="hidden" name="landedCostExpenseId" value={exp.id} />
               <FInput label="Date" name="date" type="date" required defaultValue={todayIso()} />
               <FInput label="Amount (AED)" name="amount" inputMode="decimal" required defaultValue={outstanding.toFixed(2)} hint={`Up to ${fmtMoney(outstanding)}`} />
-              <FSelect label="Mode" name="mode" required defaultValue="BANK" options={[{ value: "BANK", label: "Bank transfer" }, { value: "CASH", label: "Cash" }]} />
+              <PaidFromSelect />
               <FInput label="Reference" name="reference" placeholder="TT / cheque no." />
               <div className="flex items-end">
                 <SubmitButton variant="secondary">Record payment</SubmitButton>

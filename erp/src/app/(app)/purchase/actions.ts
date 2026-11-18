@@ -2,7 +2,7 @@
 import type { ShipmentStatus } from "@prisma/client";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { formObject, runAction, type ActionState } from "@/lib/action";
+import { formObject, runAction, withPaidFrom, type ActionState } from "@/lib/action";
 import {
   approvePurchaseOrder,
   cancelPurchaseOrder,
@@ -93,7 +93,7 @@ export async function shipmentStatusAction(poId: string, shipmentId: string, sta
 
 export async function paymentAction(back: string, _: ActionState, fd: FormData): Promise<ActionState> {
   const r = await runAction(async (u) => {
-    const pv = await recordSupplierPayment(u.ctx, formObject(fd));
+    const pv = await recordSupplierPayment(u.ctx, withPaidFrom(formObject(fd)));
     return `Payment ${pv.number} recorded`;
   });
   if (r.ok) {

@@ -172,6 +172,27 @@ model Account {
   active    Boolean       @default(true)
   lines     JournalLine[]
   createdAt DateTime      @default(now())
+  bank      BankAccount?
+}
+
+/// A company bank account (spec §3.4, T8-03). Each one has its own GL account under Cash & Bank.
+model BankAccount {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  name        String
+  bankName    String?
+  branch      String?
+  accountNo   String?
+  iban        String?
+  swift       String?
+  accountId   String            @unique
+  account     Account           @relation(fields: [accountId], references: [id])
+  /// Used when a bank payment does not name a bank account.
+  isDefault   Boolean           @default(false)
+  active      Boolean           @default(true)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  supplierPay SupplierPayment[]
 }
 
 model FiscalYear {
@@ -806,6 +827,9 @@ model SupplierPayment {
   date                DateTime           @db.Date
   amount              Decimal            @db.Decimal(18, 2)
   mode                PaymentMode
+  /// Set for bank payments.
+  bankAccountId       String?
+  bankAccount         BankAccount?       @relation(fields: [bankAccountId], references: [id])
   reference           String?
   notes               String?
   /// Part held as a supplier advance (paid before the invoice).

@@ -42,6 +42,12 @@ export async function seedBase(
   };
   for (const a of CHART_OF_ACCOUNTS) await upsertAcc(a, null);
 
+  // Default bank account on the "Bank - Main Account" GL account (T8-03)
+  const mainBank = await db.account.findUniqueOrThrow({ where: { systemKey: "BANK_MAIN" } });
+  if (!(await db.bankAccount.findUnique({ where: { accountId: mainBank.id } }))) {
+    await db.bankAccount.create({ data: { id: "bank_main", code: "BANK-0001", name: "Main account", accountId: mainBank.id, isDefault: true } });
+  }
+
   // Tax codes
   for (const t of TAX_CODES) {
     const out = t.output ? await db.account.findUnique({ where: { systemKey: t.output } }) : null;

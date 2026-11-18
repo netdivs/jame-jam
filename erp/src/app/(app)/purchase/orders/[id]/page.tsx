@@ -4,6 +4,7 @@ import type { ShipmentStatus } from "@prisma/client";
 import { ActionForm, FInput, FSelect, FTextarea, SubmitButton } from "@/components/forms";
 import { Card, DefList, Empty, LinkButton, PageHeader, Stat, Table } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
+import { PaidFromSelect } from "@/components/paid-from";
 import { D, prisma } from "@/server/core";
 import { isPaidAndVerified } from "@/server/purchase/orders";
 import { fmtAED, fmtDate, fmtDateTime, fmtMoney, fmtSqm, titleCase, todayIso } from "@/lib/format";
@@ -274,7 +275,7 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
               <input type="hidden" name="purchaseOrderId" value={id} />
               <FInput label="Date" name="date" type="date" required defaultValue={todayIso()} />
               <FInput label="Amount (AED)" name="amount" inputMode="decimal" required defaultValue={payCap.toFixed(2)} hint={`Up to ${fmtMoney(payCap)}`} />
-              <FSelect label="Mode" name="mode" required defaultValue="BANK" options={[{ value: "BANK", label: "Bank transfer" }, { value: "CASH", label: "Cash" }]} />
+              <PaidFromSelect />
               <FInput label="Reference" name="reference" placeholder="TT / cheque no." />
               <div className="flex items-end">
                 <SubmitButton variant="secondary">Record payment</SubmitButton>

@@ -5,10 +5,9 @@
 import { z } from "zod";
 import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, inTx, nextDocNumber, round2, toDateOnly } from "../core";
 import { postJournal } from "../accounting/gl";
+import { cashAccountFor } from "../accounting/banks";
 import { dateStr, decimal, optText, parse } from "../validation";
 import { LIVE, lockPo, paymentStatusOf } from "./orders";
-
-export const CASH_ACCOUNT: Record<"CASH" | "BANK", string> = { CASH: "CASH", BANK: "BANK_MAIN" };
 
 export const paymentSchema = z
   .object({
@@ -17,6 +16,8 @@ export const paymentSchema = z
     date: dateStr,
     amount: decimal({ gt: 0, dp: 2, label: "Amount" }),
     mode: z.enum(["CASH", "BANK"], { errorMap: () => ({ message: "Choose cash or bank" }) }),
+    /** Bank payments: which bank account (default bank account when omitted). */
+    bankAccountId: optText(40),
     reference: optText(80),
     notes: optText(500),
   })
@@ -55,6 +56,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
 
   return inTx(async (tx) => {
     const number = await nextDocNumber(tx, "PV", date);
+    const cash = await cashAccountFor(tx, input.mode, input.bankAccountId);
 
     if (input.purchaseOrderId) {
       const po = await lockPo(tx, input.purchaseOrderId);
@@ -86,6 +88,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
           date,
           amount,
           mode: input.mode,
+          bankAccountId: cash.bankAccountId,
           reference: input.reference,
           notes: input.notes,
           toAdvance,
@@ -102,7 +105,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
         lines: [
           { account: "AP", debit: toPayable, ...party },
           { account: "SUPPLIER_ADVANCES", debit: toAdvance, ...party },
-          { account: CASH_ACCOUNT[input.mode], credit: amount },
+          { account: cash.account, credit: amount },
         ],
       });
       await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, po: po.number, amount, toAdvance, toPayable } });
@@ -127,6 +130,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
         date,
         amount,
         mode: input.mode,
+        bankAccountId: cash.bankAccountId,
         reference: input.reference,
         notes: input.notes,
         toPayable: amount,
@@ -140,7 +144,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
       memo: `${number} — ${exp.supplier.name} — bill ${exp.billNo}`,
       lines: [
         { account: "AP", debit: amount, partyType: "SUPPLIER", partyId: exp.supplierId },
-        { account: CASH_ACCOUNT[input.mode], credit: amount },
+        { account: cash.account, credit: amount },
       ],
     });
     await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, bill: exp.billNo, amount } });

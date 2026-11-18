@@ -33,6 +33,9 @@ import {
   Coins,
   ClipboardCheck,
   ScrollText,
+  Landmark,
+  ChartColumn,
+  HandCoins,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -65,6 +68,9 @@ const ICONS = {
   landedCosts: Coins,
   salesOrders: ClipboardCheck,
   proformas: ScrollText,
+  banks: Landmark,
+  reports: ChartColumn,
+  receipts: HandCoins,
 };
 
 function ThemeToggle() {

@@ -43,6 +43,13 @@ export const PERMISSIONS = {
   "sales.renewPi": "Renew an expired proforma invoice",
   "sales.extendReservation": "Extend a sales order's stock reservation",
   "taxCode.change": "Use a tax code other than standard-rated (SR) on a document line",
+  // Receipts & accounts
+  "receipts.view": "View customer receipts and advances",
+  "receipts.create": "Record customer receipts (CR / RV)",
+  "receipts.cancel": "Cancel a customer receipt (posts a reversal)",
+  "bank.manage": "Create / edit company bank accounts",
+  "journal.post": "Post and reverse manual journal vouchers",
+  "reports.financial": "View financial reports (trial balance, profit & loss, balance sheet)",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -60,8 +67,10 @@ export const ROLES: { key: string; name: string; description: string; permission
     key: "manager",
     name: "Manager",
     description: "Runs operations; approves returns and POs",
-    // Spec §5: Manager only views payments.
-    permissions: ALL.filter((p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier"].includes(p)),
+    // Spec §5: Manager only views payments, receipts, bank and journals.
+    permissions: ALL.filter(
+      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post"].includes(p),
+    ),
   },
   {
     key: "accountant",
@@ -86,6 +95,12 @@ export const ROLES: { key: string; name: string; description: string; permission
       "landedCost.edit",
       "sales.view",
       "taxCode.change",
+      "receipts.view",
+      "receipts.create",
+      "receipts.cancel",
+      "bank.manage",
+      "journal.post",
+      "reports.financial",
     ],
   },
   {
@@ -93,7 +108,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     name: "Sales Staff",
     description: "Customers, sales orders and invoices",
     // Spec §5: SO / PI / TI create/edit; no cancel, renew, extend or tax code change.
-    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit"],
+    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "receipts.view", "receipts.create"],
   },
   {
     key: "storekeeper",
