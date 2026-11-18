@@ -9,7 +9,7 @@ Roadmap from the current state to production. Sequence follows spec §13. Task-l
 | 1 | Foundation | ✅ Done | auth, RBAC, audit, settings, numbering, CoA, tax codes, GL, period lock |
 | 2 | Masters | ✅ Done | customers, suppliers, products, warehouse, landed cost categories |
 | 3 | Inventory core | ✅ Done | D2, D3 |
-| 4 | Purchase & import | ✅ Development complete, not deployed; awaiting the user's visual run-through (T4-11), deployment approval (T4-13), and client confirmation of C1/C5/C6 | D5, R3, R6 |
+| 4 | Purchase & import | ✅ Development complete and browser-verified (T4-11); not deployed (deployment deferred, see below); awaiting client confirmation of C1/C5/C6 | D5, R3, R6 |
 | 5 | Sales SO/PI/TI | ⏳ Next — partly blocked by C2, C4 | D1, D4, R1 |
 | 6 | Receipts, PDC, DN | Planned | R5, R10 |
 | 7 | Returns & credit notes | Planned — CN posting blocked by C7 | R2, R4 |
@@ -17,6 +17,8 @@ Roadmap from the current state to production. Sequence follows spec §13. Task-l
 | 9 | VAT & reports | Planned | R7 |
 | 10 | CRM | Planned | R9 |
 | 11 | Opening setup, demo, readiness | Partly done (opening stock, demo stock) | R8, demo |
+
+**Release policy (user, 18 Nov 2026):** no step is deployed on its own. Production stays on Steps 1–3 until all steps are complete; then one release (T4-13 and later deploy tasks fold into it), with a verified backup and explicit approval.
 
 Cross-cutting before go-live: backups (TS-01), CI (TQ-01), security hardening (TS-02), job runner (TJ-01), PDF/Excel (TX-01/02).
 

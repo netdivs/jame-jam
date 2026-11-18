@@ -14,7 +14,7 @@
 | 1 | Foundation | ✅ Done |
 | 2 | Masters | ✅ Done |
 | 3 | Inventory core (D2, D3) | ✅ Done |
-| 4 | Purchase & import (D5, R3, R6) | ✅ Development complete and verified (17 Nov 2026). Not deployed. Still to come: user visual run-through (T4-11), deployment approval (T4-13), client confirmation of C1/C5/C6 |
+| 4 | Purchase & import (D5, R3, R6) | ✅ Development complete and verified (17 Nov 2026). Not deployed. Browser-verified (T4-11). Deployment deferred until all steps are done (user, 18 Nov 2026). Still to come: client confirmation of C1/C5/C6 |
 | 5 | Sales: SO, PI, TI (D1, D4, R1) | ⏳ Not started |
 | 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | ⏳ Not started |
 | 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
@@ -277,7 +277,7 @@ It ended with these reconciliations, all passing:
 **Still open:**
 1. Optional: the owner's personal look at the screens before the demo.
 2. T4-12 (optional, for the demo): demo purchase data.
-3. T4-13: deployment, after explicit approval and a verified backup. Afterwards re-run the base seed on the server so roles get the new permissions and the GRNI account is created. See [docs/engineering/deployment.md](docs/engineering/deployment.md).
+3. T4-13: deployment — **deferred until all steps are done** (user decision, 18 Nov 2026), then one release after explicit approval and a verified backup. Afterwards re-run the base seed on the server so roles get the new permissions and the GRNI account is created. See [docs/engineering/deployment.md](docs/engineering/deployment.md).
 4. T4-14: client confirmation of C1, C5, C6 and Q10.
 5. Known gap F5: a supplier advance left over when the invoice is lower than the amount paid has no refund path yet (T4-15, needs Step 8 refunds).
 
