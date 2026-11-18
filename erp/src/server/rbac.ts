@@ -36,6 +36,13 @@ export const PERMISSIONS = {
   "payments.supplier": "Record supplier payments (PV)",
   "landedCost.edit": "Record and allocate landed cost expenses",
   "landedCost.override": "Manually override landed cost allocation",
+  // Sales
+  "sales.view": "View sales orders, proforma invoices and tax invoices",
+  "sales.edit": "Create / edit sales orders and issue proforma invoices",
+  "sales.cancel": "Cancel sales orders and proforma invoices",
+  "sales.renewPi": "Renew an expired proforma invoice",
+  "sales.extendReservation": "Extend a sales order's stock reservation",
+  "taxCode.change": "Use a tax code other than standard-rated (SR) on a document line",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -77,13 +84,16 @@ export const ROLES: { key: string; name: string; description: string; permission
       "purchase.verifyPayment",
       "payments.supplier",
       "landedCost.edit",
+      "sales.view",
+      "taxCode.change",
     ],
   },
   {
     key: "sales",
     name: "Sales Staff",
     description: "Customers, sales orders and invoices",
-    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view"],
+    // Spec §5: SO / PI / TI create/edit; no cancel, renew, extend or tax code change.
+    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit"],
   },
   {
     key: "storekeeper",
@@ -97,6 +107,7 @@ export const ROLES: { key: string; name: string; description: string; permission
       "inventory.split",
       "purchase.view",
       "purchase.receive",
+      "sales.view",
     ],
   },
 ];

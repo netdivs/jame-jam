@@ -1,6 +1,7 @@
 // Jame Jam ERP — database schema
 // Spec: requirements/jame_jam_erp_system_technical_specification.md (v2.4)
-// Scope so far: Step 1 (foundation), Step 2 (masters), Step 3 (inventory core), Step 4 (purchase & import).
+// Scope so far: Step 1 (foundation), Step 2 (masters), Step 3 (inventory core), Step 4 (purchase & import),
+// Step 5 (sales orders and proforma invoices; tax invoices follow with T5-06).
 // Money = Decimal(18,2). SQM = Decimal(18,4). Never use Float for either.
 
 generator client {
@@ -245,6 +246,8 @@ model TaxCode {
   poItems         PurchaseOrderItem[]
   invoiceItems    SupplierInvoiceItem[]
   expenses        LandedCostExpense[]
+  soItems         SalesOrderItem[]
+  piItems         ProformaInvoiceItem[]
 }
 
 // ───────────────────────────── Masters ─────────────────────────────
@@ -263,21 +266,23 @@ model Warehouse {
 }
 
 model Customer {
-  id               String   @id @default(cuid())
-  code             String   @unique
+  id               String            @id @default(cuid())
+  code             String            @unique
   name             String
   contactPerson    String?
   mobile           String?
   email            String?
   address          String?
   trn              String?
-  creditEnabled    Boolean  @default(false)
-  creditLimit      Decimal  @default(0) @db.Decimal(18, 2)
-  paymentTermsDays Int      @default(0)
+  creditEnabled    Boolean           @default(false)
+  creditLimit      Decimal           @default(0) @db.Decimal(18, 2)
+  paymentTermsDays Int               @default(0)
   notes            String?
-  active           Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  salesOrders      SalesOrder[]
+  proformas        ProformaInvoice[]
 }
 
 enum SupplierType {
@@ -312,24 +317,26 @@ enum ProductType {
 }
 
 model Product {
-  id               String              @id @default(cuid())
-  itemCode         String              @unique
+  id               String                @id @default(cuid())
+  itemCode         String                @unique
   name             String
   type             ProductType
   category         String?
   stoneType        String?
   finish           String?
   size             String? // tiles, e.g. "60x120"
-  thicknessMm      Decimal?            @db.Decimal(8, 2)
+  thicknessMm      Decimal?              @db.Decimal(8, 2)
   defaultTaxCodeId String?
-  defaultTaxCode   TaxCode?            @relation(fields: [defaultTaxCodeId], references: [id])
-  active           Boolean             @default(true)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
+  defaultTaxCode   TaxCode?              @relation(fields: [defaultTaxCodeId], references: [id])
+  active           Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   lots             Lot[]
   slabs            Slab[]
   balances         StockBalance[]
   poItems          PurchaseOrderItem[]
+  soItems          SalesOrderItem[]
+  piItems          ProformaInvoiceItem[]
 }
 
 model LandedCostCategory {
@@ -462,6 +469,7 @@ model StockBalance {
   updatedAt    DateTime           @updatedAt
   reservations StockReservation[]
   movements    StockMovement[]
+  soItems      SalesOrderItem[]
 
   @@index([productId])
   @@index([lotId])
@@ -870,4 +878,152 @@ model LandedCostAllocation {
   createdAt        DateTime          @default(now())
 
   @@unique([expenseId, lotId])
+}
+
+// ───────────────────────────── Sales (Step 5) ─────────────────────────────
+
+/// Spec §3.3.1. Stock is reserved when the SO is saved (no draft state).
+enum SoStatus {
+  OPEN
+  PARTIALLY_INVOICED
+  INVOICED
+  DELIVERED
+  CLOSED
+  CANCELLED
+  EXPIRED
+}
+
+model SalesOrder {
+  id                   String            @id @default(cuid())
+  number               String            @unique
+  customerId           String
+  customer             Customer          @relation(fields: [customerId], references: [id])
+  /// Customer details as they were when the document was saved (spec §3.3.2).
+  customerName         String
+  customerAddress      String?
+  customerTrn          String?
+  customerMobile       String?
+  date                 DateTime          @db.Date
+  status               SoStatus          @default(OPEN)
+  priceMode            PriceMode
+  /// Invoice-level discount, in the document's price mode; spread over the lines before VAT.
+  discount             Decimal           @default(0) @db.Decimal(18, 2)
+  netTotal             Decimal           @default(0) @db.Decimal(18, 2)
+  vatTotal             Decimal           @default(0) @db.Decimal(18, 2)
+  total                Decimal           @default(0) @db.Decimal(18, 2)
+  /// Reservation validity. Not set or enforced until client decision C2 is answered (T5-03).
+  reservationExpiresAt DateTime?         @db.Date
+  notes                String?
+  cancelReason         String?
+  createdById          String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  items                SalesOrderItem[]
+  proformas            ProformaInvoice[]
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model SalesOrderItem {
+  id             String                @id @default(cuid())
+  salesOrderId   String
+  salesOrder     SalesOrder            @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  lineNo         Int
+  productId      String
+  product        Product               @relation(fields: [productId], references: [id])
+  /// The stock bucket reserved: one slab, or a lot/block/warehouse bucket for tiles.
+  balanceId      String
+  balance        StockBalance          @relation(fields: [balanceId], references: [id])
+  /// Reservation held for this line (StockReservation, refType SALES_ORDER).
+  reservationId  String?
+  description    String?
+  sqm            Decimal               @db.Decimal(18, 4)
+  /// AED per SQM in the document's price mode (incl. or excl. VAT).
+  unitPrice      Decimal               @db.Decimal(18, 4)
+  /// Line discount in the document's price mode.
+  discount       Decimal               @default(0) @db.Decimal(18, 2)
+  /// This line's share of the invoice-level discount.
+  headerDiscount Decimal               @default(0) @db.Decimal(18, 2)
+  taxCodeId      String
+  taxCode        TaxCode               @relation(fields: [taxCodeId], references: [id])
+  /// Required when the tax code is not SR (spec §3.3.5).
+  taxReason      String?
+  netAmount      Decimal               @db.Decimal(18, 2)
+  vatAmount      Decimal               @db.Decimal(18, 2)
+  grossAmount    Decimal               @db.Decimal(18, 2)
+  invoicedSqm    Decimal               @default(0) @db.Decimal(18, 4)
+  deliveredSqm   Decimal               @default(0) @db.Decimal(18, 4)
+  piItems        ProformaInvoiceItem[]
+
+  @@unique([salesOrderId, lineNo])
+  @@index([balanceId])
+}
+
+/// Spec §3.3.3. Expired is set by the daily job (or found on use); renewal is audited.
+enum PiStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+  CLOSED
+  CANCELLED
+}
+
+/// A quotation for (part of) a sales order. Posts no accounting or VAT.
+model ProformaInvoice {
+  id              String                @id @default(cuid())
+  number          String                @unique
+  salesOrderId    String
+  salesOrder      SalesOrder            @relation(fields: [salesOrderId], references: [id])
+  customerId      String
+  customer        Customer              @relation(fields: [customerId], references: [id])
+  customerName    String
+  customerAddress String?
+  customerTrn     String?
+  customerMobile  String?
+  date            DateTime              @db.Date
+  validityDays    Int
+  expiryDate      DateTime              @db.Date
+  status          PiStatus              @default(ACTIVE)
+  priceMode       PriceMode
+  discount        Decimal               @default(0) @db.Decimal(18, 2)
+  netTotal        Decimal               @default(0) @db.Decimal(18, 2)
+  vatTotal        Decimal               @default(0) @db.Decimal(18, 2)
+  total           Decimal               @default(0) @db.Decimal(18, 2)
+  terms           String?
+  notes           String?
+  renewedById     String?
+  renewedAt       DateTime?
+  renewCount      Int                   @default(0)
+  closeReason     String?
+  createdById     String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  items           ProformaInvoiceItem[]
+
+  @@index([salesOrderId])
+  @@index([status, expiryDate])
+}
+
+model ProformaInvoiceItem {
+  id                String          @id @default(cuid())
+  proformaInvoiceId String
+  proformaInvoice   ProformaInvoice @relation(fields: [proformaInvoiceId], references: [id], onDelete: Cascade)
+  lineNo            Int
+  salesOrderItemId  String
+  salesOrderItem    SalesOrderItem  @relation(fields: [salesOrderItemId], references: [id])
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  description       String?
+  sqm               Decimal         @db.Decimal(18, 4)
+  unitPrice         Decimal         @db.Decimal(18, 4)
+  discount          Decimal         @default(0) @db.Decimal(18, 2)
+  headerDiscount    Decimal         @default(0) @db.Decimal(18, 2)
+  taxCodeId         String
+  taxCode           TaxCode         @relation(fields: [taxCodeId], references: [id])
+  netAmount         Decimal         @db.Decimal(18, 2)
+  vatAmount         Decimal         @db.Decimal(18, 2)
+  grossAmount       Decimal         @db.Decimal(18, 2)
+
+  @@unique([proformaInvoiceId, lineNo])
 }
