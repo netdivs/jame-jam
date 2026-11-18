@@ -77,6 +77,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               { href: "/accounts/chart", label: "Chart of accounts", icon: "coa" as const },
               { href: "/accounts/journals", label: "Journal entries", icon: "journals" as const },
               { href: "/accounts/banks", label: "Bank accounts", icon: "banks" as const },
+              { href: "/accounts/ledgers", label: "Customer & supplier ledgers", icon: "ledgers" as const },
               { href: "/accounts/bank-rec", label: "Bank reconciliation", icon: "bankRec" as const },
               { href: "/refunds", label: "Refunds", icon: "refunds" as const },
             ]

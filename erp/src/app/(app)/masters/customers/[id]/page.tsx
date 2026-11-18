@@ -6,7 +6,7 @@ import { prisma } from "@/server/core";
 import { saveCustomerAction } from "../../actions";
 
 export default async function CustomerForm({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission("customers.edit");
+  const user = await requirePermission("customers.edit");
   const { id } = await params;
   const isNew = id === "new";
   const c = isNew ? null : await prisma.customer.findUnique({ where: { id } });
@@ -14,7 +14,7 @@ export default async function CustomerForm({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <PageHeader title={isNew ? "New customer" : c!.name} subtitle={c?.code} back={{ href: "/masters/customers", label: "Customers" }} />
+      <PageHeader title={isNew ? "New customer" : c!.name} subtitle={c?.code} back={{ href: "/masters/customers", label: "Customers" }} actions={!isNew && user.ctx.permissions.has("accounts.view") && <LinkButton href={`/accounts/ledgers/customer/${id}`} variant="secondary">Ledger / statement</LinkButton>} />
       <Card className="max-w-3xl">
         <ActionForm action={saveCustomerAction.bind(null, isNew ? null : id)} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

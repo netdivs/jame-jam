@@ -40,6 +40,7 @@ import {
   Undo2,
   PiggyBank,
   ListChecks,
+  NotebookTabs,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -79,6 +80,7 @@ const ICONS = {
   refunds: Undo2,
   pettyCash: PiggyBank,
   bankRec: ListChecks,
+  ledgers: NotebookTabs,
 };
 
 function ThemeToggle() {
@@ -166,8 +168,8 @@ export function AppShell({
   );
 
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr]">
-      <aside className="hidden border-r border-border bg-surface lg:sticky lg:top-0 lg:block lg:h-screen">{sidebar}</aside>
+    <div className="min-h-screen lg:grid lg:grid-cols-[232px_1fr] print:!block">
+      <aside className="hidden border-r border-border bg-surface lg:sticky lg:top-0 lg:block lg:h-screen print:!hidden">{sidebar}</aside>
 
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
@@ -187,7 +189,7 @@ export function AppShell({
       )}
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur">
+        <header className="sticky top-0 z-30 flex h-14 print:hidden items-center justify-between gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur">
           <button
             type="button"
             onClick={() => setOpen(true)}

@@ -20,6 +20,11 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — customer and supplier ledgers (T8-01; not deployed)
+- `/accounts/ledgers`: customers or suppliers with receivable/payable, advance and balance, and the spec §11.3 check (Σ parties = AR, AP and both advance accounts).
+- Statement per party for a date range: opening, every entry with a link to its document and running balance, closing split into owed and advance; money held on proformas / unpaid supplier invoices; goods received not invoiced. "Ledger / statement" button on customer and supplier pages; printing hides the menu.
+- TD-030. Tests: 3 ledger tests (98 in total); Playwright ledgers flow (16 in total).
+
 ### Added — bank reconciliation (T8-05; not deployed)
 - Bank statement lines by hand or CSV import with column mapping (dry run, duplicate check); match suggestions and auto-match; match one line to several book entries; post bank charges from the statement; reconciliation summary per statement date; save (locks the period) and reopen with a reason.
 - `/accounts/bank-rec`. Permission `bankRec.manage`. Migration `bank_reconciliation` (additive). TD-029.
