@@ -15,7 +15,8 @@
     "db:reset": "prisma migrate reset --force",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "jobs:run": "tsx scripts/run-jobs.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

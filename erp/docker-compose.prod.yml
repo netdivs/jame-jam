@@ -29,5 +29,19 @@ services:
     ports:
       - "127.0.0.1:${APP_PORT:-3010}:3000"
 
+  # Scheduled jobs (TJ-01): PI expiry, session clean-up, stock = GL check. Wakes every hour; each job runs
+  # once per business day (JobRun table). Same image as the app; migrations are applied by the app container.
+  jobs:
+    build: .
+    container_name: jamejam-prod-jobs
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://jamejam:${POSTGRES_PASSWORD}@db:5432/jamejam?schema=public
+      TZ: Asia/Dubai
+    command: ["sh", "-c", "sleep 120; while true; do npx tsx scripts/run-jobs.ts; sleep 3600; done"]
+
 volumes:
   jamejam-prod-pgdata:

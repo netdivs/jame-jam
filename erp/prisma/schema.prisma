@@ -1093,3 +1093,30 @@ model CustomerReceipt {
   @@index([customerId])
   @@index([proformaInvoiceId])
 }
+
+// ───────────────────────────── Scheduled jobs (TJ-01) ─────────────────────────────
+
+enum JobRunStatus {
+  RUNNING
+  OK
+  WARNING
+  FAILED
+}
+
+/// One run of a scheduled job. (job, runKey) is unique: the daily runner uses the business date as the key,
+/// so a job runs at most once per day however often the runner wakes up; manual runs use their own key.
+model JobRun {
+  id         String       @id @default(cuid())
+  job        String
+  runKey     String
+  status     JobRunStatus @default(RUNNING)
+  result     Json?
+  error      String?
+  trigger    String // schedule | manual
+  userId     String?
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+
+  @@unique([job, runKey])
+  @@index([startedAt])
+}

@@ -50,6 +50,7 @@ export const PERMISSIONS = {
   "bank.manage": "Create / edit company bank accounts",
   "journal.post": "Post and reverse manual journal vouchers",
   "reports.financial": "View financial reports (trial balance, profit & loss, balance sheet)",
+  "jobs.run": "View scheduled job runs and run them now",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;

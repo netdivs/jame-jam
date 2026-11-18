@@ -162,3 +162,23 @@ describe("financial reports (T8-07)", () => {
     expect((await ctxFor("manager")).permissions.has("reports.financial")).toBe(true);
   });
 });
+
+describe("scheduled jobs (TJ-01)", () => {
+  it("runs each job once per business day, expires due proformas, and records the run", async () => {
+    const { runDailyJobs, runJobNow } = await import("../src/server/jobs");
+    const asOf = toDateOnly("2027-06-30"); // far enough ahead that every unpaid test PI is past its validity
+    const due = await prisma.proformaInvoice.count({ where: { status: "ACTIVE", receivedAmount: 0, expiryDate: { lt: asOf } } });
+    const first = await runDailyJobs(asOf);
+    expect(first.map((o) => o.status)).toEqual(["OK", "OK", "OK"]);
+    expect(first.find((o) => o.job === "pi-expiry")?.result).toEqual({ expired: due });
+    expect(first.find((o) => o.job === "stock-gl-check")?.result).toMatchObject({ difference: "0" });
+    const second = await runDailyJobs(asOf);
+    expect(second.every((o) => o.status === "SKIPPED")).toBe(true);
+    expect(await prisma.jobRun.count({ where: { runKey: "2027-06-30" } })).toBe(3);
+
+    await expectError(runJobNow(await ctxFor("sales"), "pi-expiry"), "FORBIDDEN");
+    const manual = await runJobNow(await ctxFor("manager"), "session-cleanup");
+    expect(manual.status).toBe("OK");
+    await expectError(runJobNow(await ctxFor("owner"), "nope"), "VALIDATION");
+  });
+});
