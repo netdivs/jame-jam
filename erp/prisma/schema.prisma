@@ -180,26 +180,28 @@ model Account {
 
 /// A company bank account (spec §3.4, T8-03). Each one has its own GL account under Cash & Bank.
 model BankAccount {
-  id          String                 @id @default(cuid())
-  code        String                 @unique
-  name        String
-  bankName    String?
-  branch      String?
-  accountNo   String?
-  iban        String?
-  swift       String?
-  accountId   String                 @unique
-  account     Account                @relation(fields: [accountId], references: [id])
+  id              String                 @id @default(cuid())
+  code            String                 @unique
+  name            String
+  bankName        String?
+  branch          String?
+  accountNo       String?
+  iban            String?
+  swift           String?
+  accountId       String                 @unique
+  account         Account                @relation(fields: [accountId], references: [id])
   /// Used when a bank payment does not name a bank account.
-  isDefault   Boolean                @default(false)
-  active      Boolean                @default(true)
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  supplierPay SupplierPayment[]
-  receipts    CustomerReceipt[]
-  cheques     Cheque[]
-  refunds     Refund[]
-  pettyTopUps PettyCashTransaction[]
+  isDefault       Boolean                @default(false)
+  active          Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  supplierPay     SupplierPayment[]
+  receipts        CustomerReceipt[]
+  cheques         Cheque[]
+  refunds         Refund[]
+  pettyTopUps     PettyCashTransaction[]
+  statementLines  BankStatementLine[]
+  reconciliations BankReconciliation[]
 }
 
 model FiscalYear {
@@ -248,6 +250,7 @@ model JournalLine {
   partyType String? // CUSTOMER, SUPPLIER
   partyId   String?
   memo      String?
+  bankMatch BankMatch?
 
   @@index([accountId])
   @@index([partyType, partyId])
@@ -1359,4 +1362,60 @@ model PettyCashTransaction {
 
   @@index([pettyCashAccountId, date])
   @@index([categoryId])
+}
+
+// ───────────────────────────── Bank reconciliation (T8-05) ─────────────────────────────
+
+/// One line of a bank statement, entered by hand or imported from CSV. amount > 0 = money in, < 0 = money out.
+model BankStatementLine {
+  id            String      @id @default(cuid())
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
+  date          DateTime    @db.Date
+  description   String
+  reference     String?
+  amount        Decimal     @db.Decimal(18, 2)
+  /// Set for lines from one CSV import.
+  importBatch   String?
+  createdById   String?
+  createdAt     DateTime    @default(now())
+  matches       BankMatch[]
+
+  @@index([bankAccountId, date])
+}
+
+/// A statement line matched to one or more ledger lines on the bank's GL account (their amounts add up to it).
+/// A ledger line is matched at most once.
+model BankMatch {
+  id              String            @id @default(cuid())
+  statementLineId String
+  statementLine   BankStatementLine @relation(fields: [statementLineId], references: [id])
+  journalLineId   String            @unique
+  journalLine     JournalLine       @relation(fields: [journalLineId], references: [id])
+  matchedById     String?
+  createdAt       DateTime          @default(now())
+
+  @@index([statementLineId])
+}
+
+/// A saved reconciliation for a statement date (spec §3.4.6: "saved per period"). Statement lines and matches dated
+/// on or before the latest saved date are locked until it is reopened.
+model BankReconciliation {
+  id               String      @id @default(cuid())
+  bankAccountId    String
+  bankAccount      BankAccount @relation(fields: [bankAccountId], references: [id])
+  statementDate    DateTime    @db.Date
+  statementBalance Decimal     @db.Decimal(18, 2)
+  bookBalance      Decimal     @db.Decimal(18, 2)
+  /// Statement lines not yet in the books (+ in, − out).
+  unrecorded       Decimal     @db.Decimal(18, 2)
+  /// Book lines not yet on the statement (+ deposits in transit, − payments not yet presented).
+  outstanding      Decimal     @db.Decimal(18, 2)
+  /// Snapshot of the unmatched items at saving time.
+  items            Json
+  notes            String?
+  createdById      String?
+  createdAt        DateTime    @default(now())
+
+  @@unique([bankAccountId, statementDate])
 }

@@ -56,6 +56,7 @@ export const PERMISSIONS = {
   "refunds.cancel": "Cancel a refund voucher (posts a reversal)",
   "pettyCash.view": "View petty cash boxes, transactions and the daily cash report",
   "pettyCash.manage": "Record petty cash top-ups and expenses, cancel them, and manage boxes and expense categories",
+  "bankRec.manage": "Enter and import bank statements, match them, post bank charges and save reconciliations",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -75,7 +76,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     description: "Runs operations; approves returns and POs",
     // Spec §5: Manager only views payments, receipts, bank and journals.
     permissions: ALL.filter(
-      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage", "refunds.create", "refunds.cancel", "pettyCash.manage"].includes(p),
+      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage", "refunds.create", "refunds.cancel", "pettyCash.manage", "bankRec.manage"].includes(p),
     ),
   },
   {
@@ -112,6 +113,7 @@ export const ROLES: { key: string; name: string; description: string; permission
       "refunds.cancel",
       "pettyCash.view",
       "pettyCash.manage",
+      "bankRec.manage",
     ],
   },
   {

@@ -18,7 +18,7 @@
 | 5 | Sales: SO, PI, TI (D1, D4, R1) | 🔨 In progress. Sales orders with reservation (D1) and proforma invoices with expiry/renewal (R1) are built and verified. VAT maths (D4) built as the C4 proposal. Tax invoices wait for C4; reservation expiry waits for C2 |
 | 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | 🔨 In progress: customer receipts/advances (CR/RV) and post-dated cheques (R5) built. Allocation to invoices and the DN wait for the tax invoice (C4) |
 | 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
-| 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. refund vouchers and supplier advance transfers (T8-06, T4-15), petty cash and the Daily Cash report (T8-04). Ledgers and bank reconciliation to come |
+| 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. refund vouchers and supplier advance transfers (T8-06, T4-15), petty cash and the Daily Cash report (T8-04), bank reconciliation (T8-05). Customer/supplier ledgers and statements to come |
 | 9 | VAT & reports (R7) | ⏳ Not started |
 | 10 | CRM (R9) | ⏳ Not started |
 | 11 | Opening setup (R8), mobile dashboard, demo data, client demo | 🟡 Partly done (opening stock entry, demo stock) |
@@ -331,6 +331,12 @@ Done without waiting for client decisions, in this order: T8-03 → T8-02 → T8
 `/petty-cash`: boxes with balances, transactions, top-up (from cash or bank) and expense (category, VAT-inclusive amount, SR → input VAT), detail with GL and cancel. `/petty-cash/settings`: boxes (own GL account each, custodian) and expense categories (→ expense account). `/petty-cash/daily`: Daily Cash report for cash in hand and all boxes. Rules: TD-028. Not yet: receipt photo attachment (no file storage yet), PDF/Excel of the daily report (TX-01/02).
 
 **Verification:** Vitest 90/90; Playwright 12/12 three times (desktop and Pixel 7); typecheck, lint, build, no drift. A same-day top-up + expense bug in the "never below zero" check was caught by the tests and fixed before commit.
+
+## 6g. Bank reconciliation ✅ (T8-05 — 18 Nov 2026)
+
+`/accounts/bank-rec`: per bank — add statement lines, import CSV (column mapping, Check then Import), suggestions with one-click Match, Auto-match, "Match several…", post bank charges from a statement line, unmatch, reconciliation summary at a statement date, save (locks) and reopen. Rules: TD-029. Not yet: Excel import (TX-02); PDF of the reconciliation report (TX-01). Note: the reconciliation reads every ledger line of the bank up to the date; fine for this company's volume, to be moved to SQL aggregation if a bank grows past tens of thousands of lines. Lists on the page show 100 rows (totals cover all).
+
+**Verification:** Vitest 95/95; Playwright 14/14 three times (desktop and Pixel 7); typecheck, lint, build, no drift. The E2E caught that React 19 resets a form after a submit, which emptied the CSV mapping between Check and Import; the import form now submits without the reset.
 
 ## 7. Deployment
 

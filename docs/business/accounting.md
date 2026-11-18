@@ -94,6 +94,7 @@ Audited: every journal `post` (number, sourceType, sourceId, total); period `loc
 | Manual JV | Planned (Step 8) | — |
 | Customer/supplier ledgers and statements | Planned (Step 8, F8) | party columns on `JournalLine` |
 | Petty cash, Daily Cash report | Done (T8-04, TD-028) | `erp/src/server/accounting/petty-cash.ts`, `/petty-cash` |
+| Bank reconciliation (statement lines, CSV import, matching, bank charges, saved reconciliations) | Done (T8-05, TD-029) | `erp/src/server/accounting/bank-rec.ts`, `/accounts/bank-rec` |
 | Bank accounts and reconciliation | Planned (Step 8, F9) | single `BANK_MAIN` |
 | Trial balance, P&L, balance sheet, daily cash, bank, expense reports | Planned (Step 9) | `accountBalance()` helper |
 | Journal reversal | Planned | — |

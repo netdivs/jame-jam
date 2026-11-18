@@ -70,7 +70,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T8-02 | Manual journal voucher (permission, balanced, period lock) | Med | — | DONE | O | Uses `postJournal` | H R P G A |
 | T8-03 | Bank account master; payments choose bank account (replaces single BANK_MAIN, F9) | High | — | DONE | C (schema) | Existing BANK_MAIN mapped to first bank account | H G |
 | T8-04 | Petty cash (top-up, expense with category, optional input VAT, daily cash report) | Med | T8-03 | DONE (18 Nov 2026, TD-028; receipt attachment waits for file storage) | O | — | H R P G |
-| T8-05 | Bank reconciliation (manual/CSV statement lines, matching) | Med | T8-03 | PLANNED | O | — | H G |
+| T8-05 | Bank reconciliation (manual/CSV statement lines, matching) | Med | T8-03 | DONE (18 Nov 2026, TD-029; Excel import waits for TX-02) | O | — | H G |
 | T8-06 | Refund vouchers (customer and supplier) | Med | T8-03 | DONE (18 Nov 2026, TD-027) | O | Unblocks T4-15 | H R P G |
 | T8-07 | Financial reports: trial balance, P&L, balance sheet | Med | — | DONE | O | Ties to journals | G |
 
