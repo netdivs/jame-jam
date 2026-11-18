@@ -28,7 +28,11 @@ Suppliers are paid 100% before goods are released (BD-11); customers must pay a 
 
 **Customer receipts (Planned, Step 6):** CR (cash) and RV (bank) with the same accounting; receipt by PDC (see [PDC](pdc.md)); receipt may reference PIs; advance auto-knocked off when the PI's SO is invoiced; other allocation manual or FIFO (spec §3.3.6). TI payment status = total − allocated receipts/advances/credit notes; this drives the DN gate.
 
-**Refunds (Planned, Step 8):** manual Refund Voucher for customer advances (spec §3.3.6, C7) and supplier advances (F5).
+**Refunds (Done, T8-06/T4-15, TD-027):** Refund Voucher `RF` (`erp/src/server/refunds/refunds.ts`, `/refunds`).
+- Customer refund: Dr Customer Advances (party) / Cr Cash-Bank. From a proforma: at most its received amount, which goes down. Otherwise at most the free advance (advance − uncleared cheques − money held on proformas).
+- Supplier refund: Dr Cash-Bank / Cr Supplier Advances, only from the leftover advance of a closed PO.
+- Advance transfer `AT`: a closed PO's leftover advance applied to another open PO of the same supplier (counts as paid there; settles posted invoices first with Dr AP / Cr Supplier Advances).
+- Cancel: refunds post the reverse entry; a transfer only while unused on the target. Permissions `refunds.create` / `refunds.cancel` (Owner, Accountant); transfers need `payments.supplier`. Credit-note refunds wait for C7.
 
 ## 4. Business rules
 
@@ -86,13 +90,13 @@ Audited: PV `create` (number, PO or bill, amount, toAdvance, toPayable); journal
 | PV against a landed cost bill | Done | `/purchase/landed-costs/[id]` |
 | Supplier advance knock-off | Done | `postSupplierInvoice` |
 | Customer receipts CR/RV, advances, allocation | Planned (Step 6) | accounts `CUSTOMER_ADVANCES`, `AR` seeded |
-| Refund vouchers | Planned (Step 8) | — |
+| Refund vouchers, supplier advance transfer | Done (T8-06, T4-15) | `/refunds`, PO page |
 | Multiple bank accounts | Planned (Step 8, F9) | single `BANK_MAIN` |
 | PV / CR / RV PDFs | Planned (Step 11) | — |
 
 ## 12. Known gaps
 
-- **F5:** a supplier advance left on a PO after the invoice (invoice lower than amount paid) has no refund or offset path → Step 8 (refund voucher / supplier ledger).
+- **F5:** resolved for closed POs (refund or transfer, TD-027). Still open: a paid PO whose goods never fully arrive cannot be short-closed, so its advance stays locked.
 - **F9:** one `CASH` and one `BANK_MAIN` account only; no bank account master.
 - No payment cancellation/reversal.
 - No payment by PDC on the supplier side yet (see [PDC](pdc.md)).

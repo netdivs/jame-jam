@@ -18,6 +18,7 @@ import {
   shipmentStatusAction,
 } from "../../actions";
 import { PayStatus, PoStatus, ShipStatus } from "../../shared";
+import { cancelTransferAction, transferAction } from "../../../refunds/actions";
 
 const NEXT_SHIPMENT: Partial<Record<ShipmentStatus, ShipmentStatus>> = { ORDERED: "IN_TRANSIT", IN_TRANSIT: "AT_PORT", AT_PORT: "COLLECTED" };
 
@@ -34,11 +35,23 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
       receipts: { orderBy: { createdAt: "asc" }, include: { shipment: true } },
       invoices: { orderBy: { createdAt: "asc" } },
       payments: { orderBy: { createdAt: "asc" } },
+      refunds: { orderBy: { createdAt: "asc" } },
+      advanceOut: { orderBy: { createdAt: "asc" }, include: { toPurchaseOrder: { select: { id: true, number: true } } } },
+      advanceIn: { orderBy: { createdAt: "asc" }, include: { fromPurchaseOrder: { select: { id: true, number: true } } } },
       expenses: { orderBy: { createdAt: "asc" }, include: { category: true, supplier: true } },
       lots: { orderBy: { createdAt: "asc" }, include: { product: true } },
     },
   });
   if (!po) notFound();
+
+  const leftover = po.status === "CLOSED" && D(po.advanceBalance).gt(0);
+  const targets = leftover && has("payments.supplier")
+    ? await prisma.purchaseOrder.findMany({ where: { supplierId: po.supplierId, id: { not: po.id }, status: { in: ["APPROVED", "PARTIALLY_RECEIVED", "RECEIVED"] } }, orderBy: { date: "desc" } })
+    : [];
+  const transfers = [
+    ...po.advanceOut.map((t) => ({ t, out: true, other: t.toPurchaseOrder })),
+    ...po.advanceIn.map((t) => ({ t, out: false, other: t.fromPurchaseOrder })),
+  ];
 
   const [categories, suppliers, taxes, settings] = await Promise.all([
     prisma.landedCostCategory.findMany({ where: { active: true }, orderBy: { name: "asc" } }),
@@ -284,6 +297,83 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
           </div>
         )}
       </Card>
+
+      {/* Leftover advance: refund or move to another PO (T4-15) */}
+      {(leftover || po.refunds.length > 0 || transfers.length > 0) && (
+        <Card title="Advance refunds and transfers" className="mb-5" pad={false}>
+          {leftover && (
+            <p className="px-4 pt-4 text-sm">
+              This PO is closed with <span className="font-medium">{fmtAED(po.advanceBalance)}</span> of advance left (paid more than invoiced). Take it back from the supplier, or apply it to another PO of {po.supplier.name}.
+            </p>
+          )}
+          {(po.refunds.length > 0 || transfers.length > 0) && (
+            <Table>
+              <thead>
+                <tr>
+                  <th>Document</th>
+                  <th>Date</th>
+                  <th>What</th>
+                  <th className="num">Amount</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {po.refunds.map((r) => (
+                  <tr key={r.id}>
+                    <td className="whitespace-nowrap"><Link href={`/refunds/${r.id}`} className="font-mono text-xs text-primary hover:underline">{r.number}</Link></td>
+                    <td className="whitespace-nowrap">{fmtDate(r.date)}</td>
+                    <td>Refund received from supplier</td>
+                    <td className="num">{fmtMoney(r.amount)}</td>
+                    <td>{r.status === "POSTED" ? "Posted" : "Cancelled"}</td>
+                  </tr>
+                ))}
+                {transfers.map(({ t, out, other }) => (
+                  <tr key={t.id}>
+                    <td className="whitespace-nowrap font-mono text-xs">{t.number}</td>
+                    <td className="whitespace-nowrap">{fmtDate(t.date)}</td>
+                    <td>
+                      {out ? "Moved to" : "Moved in from"} <Link href={`/purchase/orders/${other.id}`} className="text-primary hover:underline">{other.number}</Link>
+                      <span className="block text-xs text-muted">{t.reason}</span>
+                      {t.status === "POSTED" && !out && has("payments.supplier") && D(t.toPayable).isZero() && (
+                        <ActionForm action={cancelTransferAction.bind(null, t.id)} className="mt-2 flex flex-wrap items-end gap-2">
+                          <FInput label="Cancel reason" name="reason" required aria-label={`Cancel reason for ${t.number}`} />
+                          <SubmitButton variant="secondary" pendingText="Cancelling…">Cancel transfer</SubmitButton>
+                        </ActionForm>
+                      )}
+                    </td>
+                    <td className="num">{fmtMoney(t.amount)}</td>
+                    <td>{t.status === "POSTED" ? "Posted" : "Cancelled"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+          {leftover && (has("refunds.create") || has("payments.supplier")) && (
+            <div className="grid gap-4 border-t border-border p-4">
+              {has("refunds.create") && (
+                <div>
+                  <LinkButton href={`/refunds/new?po=${po.id}`} variant="secondary">Record refund from supplier</LinkButton>
+                </div>
+              )}
+              {has("payments.supplier") && (
+                targets.length === 0 ? (
+                  <p className="text-sm text-muted">No other open PO of this supplier to move the advance to.</p>
+                ) : (
+                  <ActionForm action={transferAction.bind(null, po.id)} resetOnSuccess className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                    <FSelect label="Move to PO" name="toPurchaseOrderId" required placeholder="Select PO…" options={targets.map((t) => ({ value: t.id, label: `${t.number} — ${fmtMoney(D(t.total).minus(t.paidAmount))} unpaid` }))} />
+                    <FInput label="Date" name="date" type="date" required defaultValue={todayIso()} />
+                    <FInput label="Amount (AED)" name="amount" inputMode="decimal" required defaultValue={D(po.advanceBalance).toFixed(2)} />
+                    <FInput label="Reason" name="reason" required placeholder="e.g. Use on next order" />
+                    <div className="flex items-end">
+                      <SubmitButton variant="secondary" pendingText="Moving…">Move advance</SubmitButton>
+                    </div>
+                  </ActionForm>
+                )
+              )}
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* GRNs */}
       <Card title="Goods receipts (GRN)" className="mb-5" pad={false}>

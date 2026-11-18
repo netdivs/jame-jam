@@ -27,7 +27,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T4-12 | Demo data: one import PO through every status, all 10 landed cost categories, local PO | Med | T4-09 | PLANNED | O / C | Idempotent seed step; skipped when purchase data exists | H |
 | T4-13 | Production deployment of Step 4 — **deferred: one release after all steps are done (user, 18 Nov 2026)** | High | all steps, user approval | DEFERRED | C + user | Backup verified; migration applied; base seed re-run; smoke test passes | smoke |
 | T4-14 | Client confirmation of C1, C5, C6, Q10 | High | — | BLOCKED (client) | user | Answers recorded in DECISIONS.md | — |
-| T4-15 | Leftover supplier advance (invoice < paid) — refund or offset path (F5) | Med | T8-03 | PLANNED | O | Advance can be refunded (PV refund) or applied to another PO of the same supplier | H R P G A |
+| T4-15 | Leftover supplier advance (invoice < paid) — refund or offset path (F5) | Med | T8-03 | DONE (18 Nov 2026; closed POs only, TD-027) | O | Advance can be refunded (PV refund) or applied to another PO of the same supplier | H R P G A |
 | T4-16 | Playwright E2E for the purchase flow | Med | — | DONE (local) | C | `npm run test:e2e` (`e2e/purchase-flow.spec.ts`, desktop + mobile). Running it in CI is part of TQ-01 | E2E |
 
 ## Step 5 — Sales (SO, PI, TI) — see [PLAN.md](PLAN.md#step-5--sales-so-pi-ti)
@@ -71,7 +71,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T8-03 | Bank account master; payments choose bank account (replaces single BANK_MAIN, F9) | High | — | DONE | C (schema) | Existing BANK_MAIN mapped to first bank account | H G |
 | T8-04 | Petty cash (top-up, expense with category, optional input VAT, daily cash report) | Med | T8-03 | PLANNED | O | — | H R P G |
 | T8-05 | Bank reconciliation (manual/CSV statement lines, matching) | Med | T8-03 | PLANNED | O | — | H G |
-| T8-06 | Refund vouchers (customer and supplier) | Med | T8-03 | PLANNED | O | Unblocks T4-15 | H R P G |
+| T8-06 | Refund vouchers (customer and supplier) | Med | T8-03 | DONE (18 Nov 2026, TD-027) | O | Unblocks T4-15 | H R P G |
 | T8-07 | Financial reports: trial balance, P&L, balance sheet | Med | — | DONE | O | Ties to journals | G |
 
 ## Step 9 — VAT & Reports

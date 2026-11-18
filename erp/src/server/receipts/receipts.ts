@@ -3,13 +3,14 @@
 //  - A receipt may reference a proforma: the PI must be usable (not expired, not closed) and belong to the
 //    same customer; receipts against one PI never exceed its total (TD-021). Paid PIs no longer expire.
 //  - The money stays a customer advance until a tax invoice takes it (T5-07, waits for C4). Refunds are manual
-//    (T8-06). PDC receipts come with T6-02.
+//    (T8-06, refunds/refunds.ts). PDC receipts come with T6-02.
 //  - A receipt is never edited. A wrong one is cancelled with a reason, which posts the reverse entry.
 import { z } from "zod";
 import { AppError, Ctx, D, Dec, Tx, assertCan, audit, inTx, nextDocNumber, prisma, round2, toDateOnly, today } from "../core";
 import { postJournal } from "../accounting/gl";
 import { cashAccountFor } from "../accounting/banks";
 import { assertPiUsable } from "../sales/proformas";
+import { customerAdvancePosition, lockCustomer } from "../refunds/refunds";
 import { dateStr, decimal, optText, parse } from "../validation";
 
 export const receiptSchema = z.object({
@@ -97,12 +98,22 @@ export async function cancelCustomerReceipt(ctx: Ctx, id: string, raw: { reason:
   return inTx(async (tx) => {
     const r0 = await tx.customerReceipt.findUnique({ where: { id } });
     if (!r0) throw new AppError("NOT_FOUND", "Receipt not found");
-    if (r0.proformaInvoiceId) await lockPi(tx, r0.proformaInvoiceId); // PI → receipt, same order as recording
+    // PI → customer → receipt: the same order as recording and refunds (T8-06).
+    if (r0.proformaInvoiceId) await lockPi(tx, r0.proformaInvoiceId);
+    await lockCustomer(tx, r0.customerId);
     await tx.$queryRaw`SELECT "id" FROM "CustomerReceipt" WHERE "id" = ${id} FOR UPDATE`;
     const r = await tx.customerReceipt.findUniqueOrThrow({ where: { id }, include: { customer: true } });
     if (r.status !== "POSTED") throw new AppError("VALIDATION", `Receipt ${r.number} is already cancelled`);
     if (D(r.allocatedAmount).gt(0)) throw new AppError("VALIDATION", `Receipt ${r.number} is applied to a tax invoice; reverse that first`);
     if (date < r.date) throw new AppError("VALIDATION", "The cancellation cannot be dated before the receipt");
+    // Money already refunded cannot be cancelled again: the PI (or the free advance) must still hold it.
+    if (r.proformaInvoiceId) {
+      const held = D((await tx.proformaInvoice.findUniqueOrThrow({ where: { id: r.proformaInvoiceId } })).receivedAmount);
+      if (held.lt(r.amount)) throw new AppError("VALIDATION", `Receipt ${r.number}: the proforma now holds only AED ${held.toFixed(2)} (the rest was refunded); cancel the refund first`);
+    } else {
+      const pos = await customerAdvancePosition(r.customerId, tx);
+      if (pos.free.lt(r.amount)) throw new AppError("VALIDATION", `Receipt ${r.number}: ${r.customer.name} has only AED ${Dec.max(pos.free, 0).toFixed(2)} of free advance left (refunded or held elsewhere); cancel the refund first`);
+    }
     const original = await tx.journalEntry.findFirstOrThrow({ where: { sourceType: "CUSTOMER_RECEIPT", sourceId: r.id }, include: { lines: { include: { account: true } } } });
     await postJournal(tx, ctx, {
       date,

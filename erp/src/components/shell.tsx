@@ -37,6 +37,7 @@ import {
   ChartColumn,
   HandCoins,
   Banknote,
+  Undo2,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -73,6 +74,7 @@ const ICONS = {
   reports: ChartColumn,
   receipts: HandCoins,
   cheques: Banknote,
+  refunds: Undo2,
 };
 
 function ThemeToggle() {

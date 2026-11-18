@@ -20,6 +20,13 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — refunds and supplier advance transfers (T8-06, T4-15; not deployed)
+- Refund vouchers (RF): pay back a customer's advance (from a proforma or from the free advance) and take back a supplier's leftover advance on a closed PO; cancel with a reverse entry. `/refunds` list and detail; Refund button on proformas; refund / move panel on closed POs.
+- Supplier advance transfer (AT): apply a closed PO's leftover advance to another PO of the same supplier.
+- A customer receipt whose money was refunded can no longer be cancelled until the refund is.
+- New permissions `refunds.create`, `refunds.cancel` (Owner, Accountant). Migration `refunds_advance_transfers` (additive). TD-027.
+- Tests: 4 refund tests (86 in total); Playwright refund flow (10 in total).
+
 ### Fixed — code review (18 Nov 2026)
 - Editing a sales order with the same line twice is refused (it could corrupt totals and leave stock reserved).
 - A proforma holding money cannot be closed or cancelled, nor its sales order cancelled, until the receipts are cancelled (TD-025).

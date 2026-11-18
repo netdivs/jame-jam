@@ -52,6 +52,8 @@ export const PERMISSIONS = {
   "reports.financial": "View financial reports (trial balance, profit & loss, balance sheet)",
   "jobs.run": "View scheduled job runs and run them now",
   "pdc.manage": "Deposit, clear, bounce, cancel and replace post-dated cheques",
+  "refunds.create": "Record refund vouchers (pay back a customer advance, take back a supplier advance)",
+  "refunds.cancel": "Cancel a refund voucher (posts a reversal)",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -71,7 +73,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     description: "Runs operations; approves returns and POs",
     // Spec §5: Manager only views payments, receipts, bank and journals.
     permissions: ALL.filter(
-      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage"].includes(p),
+      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage", "refunds.create", "refunds.cancel"].includes(p),
     ),
   },
   {
@@ -104,6 +106,8 @@ export const ROLES: { key: string; name: string; description: string; permission
       "journal.post",
       "reports.financial",
       "pdc.manage",
+      "refunds.create",
+      "refunds.cancel",
     ],
   },
   {

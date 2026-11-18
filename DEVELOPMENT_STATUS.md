@@ -18,7 +18,7 @@
 | 5 | Sales: SO, PI, TI (D1, D4, R1) | 🔨 In progress. Sales orders with reservation (D1) and proforma invoices with expiry/renewal (R1) are built and verified. VAT maths (D4) built as the C4 proposal. Tax invoices wait for C4; reservation expiry waits for C2 |
 | 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | 🔨 In progress: customer receipts/advances (CR/RV) and post-dated cheques (R5) built. Allocation to invoices and the DN wait for the tax invoice (C4) |
 | 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
-| 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. Ledgers, petty cash, bank reconciliation, refunds to come |
+| 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. refund vouchers and supplier advance transfers (T8-06, T4-15). Ledgers, petty cash, bank reconciliation to come |
 | 9 | VAT & reports (R7) | ⏳ Not started |
 | 10 | CRM (R9) | ⏳ Not started |
 | 11 | Opening setup (R8), mobile dashboard, demo data, client demo | 🟡 Partly done (opening stock entry, demo stock) |
@@ -319,6 +319,12 @@ Done without waiting for client decisions, in this order: T8-03 → T8-02 → T8
 `/pdc` register, record received (Sales, Accountant, Owner) and issued (Accountant, Owner) cheques, detail page with deposit / clear / bounce (+ bank charges) / cancel / replace (`pdc.manage`: Owner, Accountant), status history, GL entries (TD-026). Dashboard widget for cheques due within `pdcReminderDays`; daily `pdc-due` job also checks register = PDC GL. Not yet: issued cheques against landed cost bills, PDC receipt PDF, allocation to tax invoices.
 
 **Verification:** Vitest 82/82; Playwright 8/8 twice (purchase, sales + receipts, accounts, PDC — desktop and Pixel 7); typecheck, lint, build, no drift.
+
+## 6e. Refunds and advance transfers ✅ (T8-06, T4-15 — 18 Nov 2026)
+
+`/refunds` list and detail. Customer refund (RF) from a proforma (lowers its received amount, so the PI can then be closed and the SO cancelled) or from the customer's free advance (advance − uncleared cheques − money on proformas). Supplier refund (RF) and advance transfer (AT) from a **closed** PO's leftover advance, on the PO page. Cancel with reversal; receipts behind refunded money cannot be cancelled first. Rules: TD-027. Not yet: refund PDF; a paid PO whose goods never fully arrive cannot be short-closed, so its advance cannot be released yet (needs a business rule).
+
+**Verification:** Vitest 86/86; Playwright 10/10 twice (desktop and Pixel 7); typecheck, lint, build, no drift.
 
 ## 7. Deployment
 

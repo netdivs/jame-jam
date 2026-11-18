@@ -195,6 +195,7 @@ model BankAccount {
   supplierPay SupplierPayment[]
   receipts    CustomerReceipt[]
   cheques     Cheque[]
+  refunds     Refund[]
 }
 
 model FiscalYear {
@@ -308,6 +309,7 @@ model Customer {
   proformas        ProformaInvoice[]
   receipts         CustomerReceipt[]
   cheques          Cheque[]
+  refunds          Refund[]
 }
 
 enum SupplierType {
@@ -316,25 +318,27 @@ enum SupplierType {
 }
 
 model Supplier {
-  id            String              @id @default(cuid())
-  code          String              @unique
+  id            String                    @id @default(cuid())
+  code          String                    @unique
   name          String
-  supplierType  SupplierType        @default(LOCAL)
+  supplierType  SupplierType              @default(LOCAL)
   contactPerson String?
   mobile        String?
   email         String?
   address       String?
   trn           String?
   notes         String?
-  active        Boolean             @default(true)
-  createdAt     DateTime            @default(now())
-  updatedAt     DateTime            @updatedAt
+  active        Boolean                   @default(true)
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
   lots          Lot[]
   orders        PurchaseOrder[]
   invoices      SupplierInvoice[]
   payments      SupplierPayment[]
   expenses      LandedCostExpense[]
   cheques       Cheque[]
+  refunds       Refund[]
+  advanceMoves  SupplierAdvanceTransfer[]
 }
 
 enum ProductType {
@@ -634,29 +638,29 @@ enum PaymentStatus {
 }
 
 model PurchaseOrder {
-  id                  String              @id @default(cuid())
-  number              String              @unique
+  id                  String                    @id @default(cuid())
+  number              String                    @unique
   supplierId          String
-  supplier            Supplier            @relation(fields: [supplierId], references: [id])
-  date                DateTime            @db.Date
-  expectedDate        DateTime?           @db.Date
-  status              PoStatus            @default(DRAFT)
+  supplier            Supplier                  @relation(fields: [supplierId], references: [id])
+  date                DateTime                  @db.Date
+  expectedDate        DateTime?                 @db.Date
+  status              PoStatus                  @default(DRAFT)
   terms               String?
   notes               String?
   /// Reference only (never posted): original currency and rate.
   refCurrency         String?
-  refRate             Decimal?            @db.Decimal(18, 6)
-  netTotal            Decimal             @default(0) @db.Decimal(18, 2)
+  refRate             Decimal?                  @db.Decimal(18, 6)
+  netTotal            Decimal                   @default(0) @db.Decimal(18, 2)
   /// VAT charged by the supplier (payable to them).
-  vatTotal            Decimal             @default(0) @db.Decimal(18, 2)
+  vatTotal            Decimal                   @default(0) @db.Decimal(18, 2)
   /// Reverse-charge VAT (imports): self-assessed, not paid to the supplier.
-  rcVatTotal          Decimal             @default(0) @db.Decimal(18, 2)
+  rcVatTotal          Decimal                   @default(0) @db.Decimal(18, 2)
   /// Amount payable to the supplier = net + vatTotal.
-  total               Decimal             @default(0) @db.Decimal(18, 2)
-  paidAmount          Decimal             @default(0) @db.Decimal(18, 2)
+  total               Decimal                   @default(0) @db.Decimal(18, 2)
+  paidAmount          Decimal                   @default(0) @db.Decimal(18, 2)
   /// Payments not yet knocked off against a supplier invoice.
-  advanceBalance      Decimal             @default(0) @db.Decimal(18, 2)
-  paymentStatus       PaymentStatus       @default(UNPAID)
+  advanceBalance      Decimal                   @default(0) @db.Decimal(18, 2)
+  paymentStatus       PaymentStatus             @default(UNPAID)
   paymentVerifiedAt   DateTime?
   paymentVerifiedById String?
   submittedAt         DateTime?
@@ -665,8 +669,8 @@ model PurchaseOrder {
   rejectionNote       String?
   cancelReason        String?
   createdById         String?
-  createdAt           DateTime            @default(now())
-  updatedAt           DateTime            @updatedAt
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
   items               PurchaseOrderItem[]
   shipments           Shipment[]
   receipts            GoodsReceipt[]
@@ -675,6 +679,9 @@ model PurchaseOrder {
   expenses            LandedCostExpense[]
   lots                Lot[]
   cheques             Cheque[]
+  refunds             Refund[]
+  advanceOut          SupplierAdvanceTransfer[] @relation("AdvanceFrom")
+  advanceIn           SupplierAdvanceTransfer[] @relation("AdvanceTo")
 
   @@index([supplierId])
   @@index([status])
@@ -1038,6 +1045,7 @@ model ProformaInvoice {
   items           ProformaInvoiceItem[]
   receipts        CustomerReceipt[]
   cheques         Cheque[]
+  refunds         Refund[]
 
   @@index([salesOrderId])
   @@index([status, expiryDate])
@@ -1202,4 +1210,76 @@ model ChequeStatusEvent {
   createdAt  DateTime      @default(now())
 
   @@index([chequeId])
+}
+
+// ───────────────────────────── Refunds and advance transfers (T8-06, T4-15) ─────────────────────────────
+
+enum RefundParty {
+  CUSTOMER
+  SUPPLIER
+}
+
+/// Refund voucher (spec §3.4.3, TD-027). Customer refund: we pay back an unapplied customer advance
+/// (Dr Customer Advances, Cr Cash/Bank). Supplier refund: the supplier pays back an advance left on a closed PO
+/// (Dr Cash/Bank, Cr Supplier Advances). Never edited; a wrong one is cancelled with a reason (reverse entry).
+model Refund {
+  id                String           @id @default(cuid())
+  number            String           @unique
+  partyType         RefundParty
+  customerId        String?
+  customer          Customer?        @relation(fields: [customerId], references: [id])
+  supplierId        String?
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id])
+  /// Customer refund of money received against this proforma (reduces its received amount).
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice? @relation(fields: [proformaInvoiceId], references: [id])
+  /// Supplier refund of the advance left on this PO.
+  purchaseOrderId   String?
+  purchaseOrder     PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  date              DateTime         @db.Date
+  amount            Decimal          @db.Decimal(18, 2)
+  mode              PaymentMode
+  bankAccountId     String?
+  bankAccount       BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  reference         String?
+  reason            String
+  status            ReceiptStatus    @default(POSTED)
+  cancelReason      String?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+
+  @@index([customerId])
+  @@index([supplierId])
+  @@index([proformaInvoiceId])
+  @@index([purchaseOrderId])
+}
+
+/// A supplier advance left on a closed PO, applied to another PO of the same supplier (T4-15).
+/// The moved amount first settles posted invoices of the target PO (Dr AP, Cr Supplier Advances); the rest stays an advance.
+model SupplierAdvanceTransfer {
+  id                  String        @id @default(cuid())
+  number              String        @unique
+  supplierId          String
+  supplier            Supplier      @relation(fields: [supplierId], references: [id])
+  fromPurchaseOrderId String
+  fromPurchaseOrder   PurchaseOrder @relation("AdvanceFrom", fields: [fromPurchaseOrderId], references: [id])
+  toPurchaseOrderId   String
+  toPurchaseOrder     PurchaseOrder @relation("AdvanceTo", fields: [toPurchaseOrderId], references: [id])
+  date                DateTime      @db.Date
+  amount              Decimal       @db.Decimal(18, 2)
+  toPayable           Decimal       @default(0) @db.Decimal(18, 2)
+  toAdvance           Decimal       @default(0) @db.Decimal(18, 2)
+  reason              String
+  status              ReceiptStatus @default(POSTED)
+  cancelReason        String?
+  cancelledAt         DateTime?
+  cancelledById       String?
+  createdById         String?
+  createdAt           DateTime      @default(now())
+
+  @@index([supplierId])
+  @@index([fromPurchaseOrderId])
+  @@index([toPurchaseOrderId])
 }

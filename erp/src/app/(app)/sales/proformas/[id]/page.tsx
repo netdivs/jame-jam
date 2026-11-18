@@ -153,6 +153,11 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
         </Card>
       )}
 
+      {D(pi.receivedAmount).gt(0) && has("refunds.create") && (
+        <div className="mb-5">
+          <LinkButton href={`/refunds/new?pi=${pi.id}`} variant="secondary">Refund to customer</LinkButton>
+        </div>
+      )}
       {PI_OPEN.includes(pi.status) && has("sales.cancel") && D(pi.receivedAmount).gt(0) && (
         <p className="mb-5 text-sm text-muted">This proforma holds {fmtAED(pi.receivedAmount)} received. Cancel or refund those receipts before closing or cancelling it.</p>
       )}

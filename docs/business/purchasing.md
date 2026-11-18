@@ -110,7 +110,7 @@ Audited: PO `create`, `update` (before/after), `submit`, `approve`, `reject` (re
 
 ## 12. Known gaps
 
-- F5: an advance left on a PO (paid more than the invoice total) has no refund/offset path → Step 8.
+- F5: resolved for closed POs — refund from supplier or move to another PO (T4-15, TD-027). A paid PO that is never fully received cannot be short-closed yet.
 - F7 no PDFs; F8 no supplier ledger.
 - The verification gate compares with the PO total, not the invoiced total: if the supplier invoices less than the PO, the PO must still be paid to its full total before GRN, which creates the F5 leftover advance.
 - No "Change Tax Code" permission: any active tax code can be chosen on PO/invoice lines (spec §3.3.5 requires permission + reason for non-SR codes).
