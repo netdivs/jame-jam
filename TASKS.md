@@ -103,7 +103,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T1-01 | Screen + service to manage per-user permission grants/revokes (F17) | Low | — | READY | O/K | `users.manage`; audited | P A |
+| T1-01 | Screen + service to manage per-user permission grants/revokes (F17) | Low | — | DONE (19 Nov 2026) | O/K | `users.manage`; audited | P A |
 | TS-01 | Automated daily PostgreSQL backups with off-server copy and a tested restore | **Critical** | user approval (server) | BLOCKED (approval) | C + user | Restore drill documented | drill |
 | TS-02 | Security hardening: login rate limit, audit failed logins/logout, IP in audit log, security headers, non-root container | High | — | DONE (18 Nov 2026, TD-032; non-root image to be confirmed at the release build) | O | [security-review.md](docs/engineering/security-review.md) items closed | R P |
 | TS-03 | Run the app in Asia/Dubai business time (`TZ=Asia/Dubai` on the app container, or explicit timezone in `today()`) (F18) | High | user approval (prod config) | CODE READY: `TZ=Asia/Dubai` on app and jobs in docker-compose.prod.yml; takes effect at the release (approval) | C | Dates after midnight Dubai are correct; test with a fixed clock | H |

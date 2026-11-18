@@ -362,6 +362,10 @@ Login rate limit, `loginFailed`/`logout` audit, IP on audit rows, security heade
 
 `/accounts/opening` and `/accounts/opening/trial-balance` (TD-033); PV and issued cheques accept an opening supplier invoice; opening received PDCs use the PDC register. Not yet: bulk import from Excel (T11-02, needs TX-02). **Verification:** Vitest 111/111; Playwright 24/24 twice; typecheck, lint, build, no drift.
 
+## 6m. Per-user permission overrides ✅ (T1-01 — 19 Nov 2026)
+
+User page → "Permission overrides". Vitest 113/113; Playwright 26/26.
+
 ## 7. Deployment
 
 - **Server:** the aaPanel host (SSH alias `aapanel`). Code is at `/www/wwwroot/jame.netdivs.us`.

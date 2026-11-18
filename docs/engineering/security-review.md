@@ -16,7 +16,7 @@ Legend: ✅ in place · ⚠️ partial · ❌ gap · n/a not applicable yet.
 | | Cookie flags | ✅ | `httpOnly`, `SameSite=Lax`, `Secure` in production |
 | | Timeout | ⚠️ | absolute TTL `SESSION_TTL_HOURS` (12 h); no idle timeout |
 | | Revocation on password change / deactivation | ✅ | sessions deleted in `saveUser` |
-| RBAC | Role + user overrides model | ⚠️ | overrides honoured but no UI/service to set them |
+| RBAC | Role + user overrides model | ✅ | overrides set on the user page (`setUserPermissionOverrides`, T1-01), audited; no self-changes |
 | Backend authorization | `assertCan` in every mutating service | ✅ | see [api-contracts.md](../architecture/api-contracts.md#3-service-catalogue-implemented) |
 | | Pages gated with `requirePermission` | ✅ | every `page.tsx` except dashboard (`requireUser`) |
 | | Middleware is not trusted | ✅ | cookie presence only |
