@@ -93,10 +93,24 @@ model AuditLog {
   before    Json?
   after     Json?
   meta      Json?
+  /// Client IP of the request that caused the change (TS-02); null for scheduled jobs and seeds.
+  ip        String?
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+/// Every sign-in attempt, for the login rate limit (TS-02). Old rows are removed by the session-cleanup job.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
 }
 
 enum PriceMode {

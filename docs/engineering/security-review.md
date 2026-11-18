@@ -10,8 +10,8 @@ Legend: ✅ in place · ⚠️ partial · ❌ gap · n/a not applicable yet.
 |---|---|---|---|
 | Authentication | Passwords hashed with a slow hash | ✅ | bcrypt cost 10 (`auth.ts`, `masters.saveUser`) |
 | | Generic login error (no enumeration) | ✅ | single "Invalid email or password" |
-| | Rate limit / lockout on login | ❌ | none ([authentication.md](../architecture/authentication.md#2-gaps-recommendations--not-implemented)) |
-| | Failed logins audited | ❌ | only successful `login` is audited |
+| | Rate limit / lockout on login | ✅ | TS-02: 5 failures per email (since the last success) or 50 per client IP in 15 min → refused before the password is checked (`login-throttle.ts`, env `LOGIN_MAX_FAILS_PER_*`). Add a Cloudflare rate-limit rule on `POST /login` as well |
+| | Failed logins audited | ✅ | `loginFailed` (email, reason, IP) and `logout` audited; every attempt kept in `LoginAttempt` (90 days) |
 | Session | Random token, only hash stored | ✅ | 32 bytes, SHA-256 in `Session.id` |
 | | Cookie flags | ✅ | `httpOnly`, `SameSite=Lax`, `Secure` in production |
 | | Timeout | ⚠️ | absolute TTL `SESSION_TTL_HOURS` (12 h); no idle timeout |
@@ -29,14 +29,14 @@ Legend: ✅ in place · ⚠️ partial · ❌ gap · n/a not applicable yet.
 | Secrets | Not in git or image | ✅ | `.env*` git- and docker-ignored; production `.env.production` only on server |
 | | Seed password handling | ⚠️ | `prisma/seed.ts` falls back to a fixed default and prints the password; set `SEED_PASSWORD` and never seed production with demo users |
 | Audit integrity | Same-transaction audit rows | ✅ | `audit()` |
-| | Tamper resistance | ⚠️ | app DB user can UPDATE/DELETE `AuditLog`; no IP captured |
+| | Tamper resistance | ⚠️ | client IP now on every audit row (TS-02); the app DB user can still UPDATE/DELETE `AuditLog` |
 | Financial operations | Approvals and payments behind distinct permissions | ✅ | `purchase.approve`, `purchase.verifyPayment`, `payments.supplier`, `landedCost.override` (+ reason) |
 | | Segregation of duties | ⚠️ | Owner holds every permission; Accountant can both pay (`payments.supplier`) and verify (`purchase.verifyPayment`) — acceptable for a small team, confirm with client |
 | | Period lock | ✅ | `postJournal` → `PERIOD_LOCKED` |
 | Production environment | HTTPS | ✅ | Cloudflare proxy; app bound to `127.0.0.1:3010` |
 | | Database not exposed | ✅ | no `ports` on the prod `db` service |
-| | Security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy) | ❌ | none in `next.config.ts` |
-| | Container runs as non-root | ❌ | `erp/Dockerfile` has no `USER` |
+| | Security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy) | ✅ | `next.config.ts` (TS-02); CSP keeps `script-src 'unsafe-inline'` for Next.js hydration (no nonce); `X-Powered-By` removed |
+| | Container runs as non-root | ✅ (built-image check pending) | two-stage `erp/Dockerfile`, runtime `USER node`. A local image build could not finish (Docker Desktop network resets during `npm ci`); verify `id` = node at the release build |
 | | Dev dependencies in runtime image | ⚠️ | `npm ci` installs devDependencies into the final single-stage image |
 | | Dependency audit | ❌ | no `npm audit` in process / CI |
 | | Demo users and demo stock removed | ❌ | live DB has demo data ([production-readiness.md](production-readiness.md)) |

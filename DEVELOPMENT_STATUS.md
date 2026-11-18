@@ -350,6 +350,10 @@ Done without waiting for client decisions, in this order: T8-03 → T8-02 → T8
 
 **Verification:** Vitest 101/101 (3 CRM tests: lead → customer, opportunity → SO won in the same transaction with rollback on a wrong customer, follow-ups, ownership, timeline, scoped report); Playwright 18/18 twice (desktop and Pixel 7); typecheck, lint, build, no drift. The E2E found two forms on one page sharing a field id ("notes"), which pointed a label at the wrong field; fields can now take their own id.
 
+## 6j. Security hardening ✅ (TS-02 — 18 Nov 2026)
+
+Login rate limit, `loginFailed`/`logout` audit, IP on audit rows, security headers, non-root Docker image (TD-032; checklist in docs/engineering/security-review.md). **Verification:** Vitest 104/104; Playwright 22/22 twice (incl. headers and the lock); typecheck, lint, build, no drift. Not verified: the Docker image itself — two local builds failed on network resets inside Docker Desktop (`npm ci` ECONNRESET), so confirm the image builds and runs as `node` at the release build.
+
 ## 7. Deployment
 
 - **Server:** the aaPanel host (SSH alias `aapanel`). Code is at `/www/wwwroot/jame.netdivs.us`.

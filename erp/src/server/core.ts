@@ -22,7 +22,8 @@ export type ErrorCode =
   | "CONFLICT"
   | "INSUFFICIENT_STOCK"
   | "PERIOD_LOCKED"
-  | "UNBALANCED";
+  | "UNBALANCED"
+  | "RATE_LIMITED";
 
 export class AppError extends Error {
   constructor(
@@ -41,6 +42,8 @@ export type Ctx = {
   permissions: ReadonlySet<string>;
   /** Seeds, scheduled jobs. Bypasses permission checks; never used for user requests. */
   isSystem?: boolean;
+  /** Client IP of the request, written to audit rows (TS-02). */
+  ip?: string | null;
 };
 export const systemCtx: Ctx = { userId: null, permissions: new Set(), isSystem: true };
 
@@ -90,6 +93,7 @@ export async function audit(
       before: toJson(e.before),
       after: toJson(e.after),
       meta: toJson(e.meta),
+      ip: ctx.ip ?? null,
     },
   });
 }

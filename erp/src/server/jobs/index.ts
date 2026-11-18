@@ -18,8 +18,14 @@ export const JOBS: Record<string, { title: string; run: (asOf: Date, ctx: Ctx) =
     run: async (asOf, ctx) => ({ status: "OK", result: { expired: await expireProformaInvoices(asOf, ctx) } }),
   },
   "session-cleanup": {
-    title: "Delete expired login sessions",
-    run: async () => ({ status: "OK", result: { deleted: (await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } })).count } }),
+    title: "Delete expired login sessions and sign-in attempts older than 90 days",
+    run: async () => ({
+      status: "OK",
+      result: {
+        deleted: (await prisma.session.deleteMany({ where: { expiresAt: { lt: new Date() } } })).count,
+        loginAttemptsDeleted: (await prisma.loginAttempt.deleteMany({ where: { createdAt: { lt: new Date(Date.now() - 90 * 86_400_000) } } })).count,
+      },
+    }),
   },
   "stock-gl-check": {
     title: "Check stock valuation = Inventory GL (warns on any difference)",

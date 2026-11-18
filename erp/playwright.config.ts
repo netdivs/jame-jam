@@ -31,6 +31,7 @@ export default defineConfig({
     url: `http://localhost:${PORT}/login`,
     reuseExistingServer: false,
     timeout: 120_000,
-    env: { DATABASE_URL: db, SESSION_TTL_HOURS: "2" },
+    // Every test sign-in comes from one local address; keep the per-IP login limit out of the way (TS-02).
+    env: { DATABASE_URL: db, SESSION_TTL_HOURS: "2", LOGIN_MAX_FAILS_PER_IP: "100000" },
   },
 });

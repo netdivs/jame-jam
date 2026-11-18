@@ -20,6 +20,12 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Security — hardening (TS-02; not deployed)
+- Sign-in lock after repeated failures (per email and per IP), failed sign-ins and sign-outs audited, client IP on every audit row.
+- Security headers (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS); `X-Powered-By` removed.
+- Docker image runs as the unprivileged `node` user (two-stage build).
+- Migration `security_login_attempts` (additive: `AuditLog.ip`, `LoginAttempt`). TD-032. Tests: 3 security tests (104 in total); Playwright security spec (22 in total).
+
 ### Added — CRM (T10-01; not deployed)
 - Leads (sources, requirement, assignee, statuses, lost reason) with conversion to a new or existing customer and an optional opportunity.
 - Opportunities with pipeline stages and values; "Create sales order (won)" opens a pre-filled SO, and saving it marks the opportunity won.
