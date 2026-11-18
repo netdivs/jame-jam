@@ -20,8 +20,6 @@ test("sign-in locks after five failures for an email", async ({ page }, info) =>
     await page.getByLabel("Email").fill(email);
     await page.getByLabel("Password").fill("wrong-password");
     await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), page.getByRole("button", { name: "Sign in" }).click()]);
-    // React 19 clears the form after the action; filling before that would be wiped and submit an empty email.
-    await expect(page.getByLabel("Email")).toHaveValue("");
   };
   for (let i = 0; i < 5; i++) {
     await attempt();

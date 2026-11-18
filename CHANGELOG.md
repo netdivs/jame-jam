@@ -20,6 +20,9 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Fixed — forms keep what was typed after an error
+- A form refused by the server (validation, limits, permissions) no longer clears its fields: `ActionForm` submits without React 19's automatic form reset and clears only on success when asked (`resetOnSuccess`). Applies to every form in the app, including sign-in.
+
 ### Added — per-user permission overrides (T1-01; not deployed)
 - Settings → Users → a user: grant or revoke single permissions on top of the role (stored only when different from the role), audited, effective on the user's next request; nobody can change their own. Tests: 2 (113 in total); Playwright permissions flow (26 in total).
 

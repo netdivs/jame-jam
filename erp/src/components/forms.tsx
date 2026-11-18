@@ -1,12 +1,14 @@
 "use client";
 // Client form wrapper: pending state, top-level message, and per-field errors from server actions.
-import { createContext, useActionState, useContext, type ReactNode } from "react";
+import { createContext, startTransition, useActionState, useContext, type FormEvent, type ReactNode } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/lib/action";
 import { Button, Input, Select, Textarea, type BtnVariant } from "./ui";
 import type { ComponentProps } from "react";
 
 const FieldErrors = createContext<Record<string, string>>({});
+/** Pending state of the enclosing ActionForm (null outside one: fall back to useFormStatus). */
+const FormPending = createContext<boolean | null>(null);
 export const useFieldError = (name: string) => useContext(FieldErrors)[name];
 
 export function ActionForm({
@@ -20,9 +22,18 @@ export function ActionForm({
   className?: string;
   resetOnSuccess?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, { ok: false } as ActionState);
+  const [state, formAction, pending] = useActionState(action, { ok: false } as ActionState);
+  // Dispatched by hand instead of <form action>: React 19 resets a form after its action runs, which wiped what the
+  // user typed whenever the server refused it. The form is cleared only on success, and only with resetOnSuccess.
+  function onSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (pending) return;
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLElement | null;
+    const fd = new FormData(e.currentTarget, submitter);
+    startTransition(() => formAction(fd));
+  }
   return (
-    <form action={formAction} className={className} noValidate key={resetOnSuccess && state.ok ? Math.random() : undefined}>
+    <form onSubmit={onSubmit} className={className} noValidate key={resetOnSuccess && state.ok ? Math.random() : undefined}>
       {state.message && (
         <div
           role={state.ok ? "status" : "alert"}
@@ -31,13 +42,17 @@ export function ActionForm({
           {state.message}
         </div>
       )}
-      <FieldErrors.Provider value={state.fields ?? {}}>{children}</FieldErrors.Provider>
+      <FormPending.Provider value={pending}>
+        <FieldErrors.Provider value={state.fields ?? {}}>{children}</FieldErrors.Provider>
+      </FormPending.Provider>
     </form>
   );
 }
 
 export function SubmitButton({ children, variant = "primary", pendingText = "Saving…" }: { children: ReactNode; variant?: BtnVariant; pendingText?: string }) {
-  const { pending } = useFormStatus();
+  const inForm = useContext(FormPending);
+  const status = useFormStatus();
+  const pending = inForm ?? status.pending;
   return (
     <Button type="submit" variant={variant} disabled={pending} aria-busy={pending}>
       {pending ? pendingText : children}

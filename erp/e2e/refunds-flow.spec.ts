@@ -44,10 +44,9 @@ test("customer refund: capped at free advance, posts, cancels", async ({ page },
     await expect(page.locator('[role="alert"]').filter({ hasText: "free advance" }).first()).toBeVisible();
     await shot(page, info, "01-capped");
 
-    // The form is cleared after a rejected submit (React 19 form actions): fill it again.
-    await page.getByLabel("Customer").selectOption({ label: CUSTOMER });
+    // A refused submit keeps what was typed (ActionForm does not reset on errors): only the amount changes.
+    await expect(page.getByLabel("Reason")).toHaveValue(`E2E refund ${tag}`);
     await page.getByLabel("Amount (AED)").fill("250");
-    await page.getByLabel("Reason").fill(`E2E refund ${tag}`);
     await page.getByRole("button", { name: "Record refund" }).click();
     await expect(page).toHaveURL(/\/refunds\/(?!new$)[a-z0-9]+$/);
     refundUrl = new URL(page.url()).pathname;
