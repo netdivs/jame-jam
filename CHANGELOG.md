@@ -20,6 +20,12 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — petty cash (T8-04; not deployed)
+- Petty cash boxes (each its own ledger account), expense categories mapped to expense accounts, top-ups from cash or bank, expenses with optional 5% input VAT (entered VAT-inclusive), cancel with reversal; a box never goes below zero, also on backdated days.
+- `/petty-cash` register with balances per box, `/petty-cash/settings` for boxes and categories, Daily Cash report (cash in hand + boxes, opening → movements with running balance → closing).
+- Permissions `pettyCash.view`, `pettyCash.manage`. Migration `petty_cash` (additive; creates the first box on the existing Petty Cash account and four default categories). TD-028.
+- Tests: 4 petty cash tests (90 in total); Playwright petty cash flow (12 in total).
+
 ### Added — refunds and supplier advance transfers (T8-06, T4-15; not deployed)
 - Refund vouchers (RF): pay back a customer's advance (from a proforma or from the free advance) and take back a supplier's leftover advance on a closed PO; cancel with a reverse entry. `/refunds` list and detail; Refund button on proformas; refund / move panel on closed POs.
 - Supplier advance transfer (AT): apply a closed PO's leftover advance to another PO of the same supplier.

@@ -93,7 +93,7 @@ Audited: every journal `post` (number, sourceType, sourceId, total); period `loc
 | Chart of accounts editing | Not built | seed only |
 | Manual JV | Planned (Step 8) | — |
 | Customer/supplier ledgers and statements | Planned (Step 8, F8) | party columns on `JournalLine` |
-| Petty cash | Planned (Step 8) | `PETTY_CASH` account seeded |
+| Petty cash, Daily Cash report | Done (T8-04, TD-028) | `erp/src/server/accounting/petty-cash.ts`, `/petty-cash` |
 | Bank accounts and reconciliation | Planned (Step 8, F9) | single `BANK_MAIN` |
 | Trial balance, P&L, balance sheet, daily cash, bank, expense reports | Planned (Step 9) | `accountBalance()` helper |
 | Journal reversal | Planned | — |

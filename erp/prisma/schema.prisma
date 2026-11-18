@@ -16,18 +16,19 @@ datasource db {
 // ───────────────────────────── Core / Admin ─────────────────────────────
 
 model User {
-  id           String           @id @default(cuid())
-  name         String
-  email        String           @unique
-  passwordHash String
-  roleId       String
-  role         Role             @relation(fields: [roleId], references: [id])
-  active       Boolean          @default(true)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  sessions     Session[]
-  overrides    UserPermission[]
-  auditLogs    AuditLog[]
+  id             String             @id @default(cuid())
+  name           String
+  email          String             @unique
+  passwordHash   String
+  roleId         String
+  role           Role               @relation(fields: [roleId], references: [id])
+  active         Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  sessions       Session[]
+  overrides      UserPermission[]
+  auditLogs      AuditLog[]
+  pettyCashBoxes PettyCashAccount[]
 }
 
 model Role {
@@ -159,43 +160,46 @@ enum AccountType {
 }
 
 model Account {
-  id        String        @id @default(cuid())
-  code      String        @unique
-  name      String
-  type      AccountType
-  parentId  String?
-  parent    Account?      @relation("AccountTree", fields: [parentId], references: [id])
-  children  Account[]     @relation("AccountTree")
-  isGroup   Boolean       @default(false)
+  id                String            @id @default(cuid())
+  code              String            @unique
+  name              String
+  type              AccountType
+  parentId          String?
+  parent            Account?          @relation("AccountTree", fields: [parentId], references: [id])
+  children          Account[]         @relation("AccountTree")
+  isGroup           Boolean           @default(false)
   /// Stable key used by posting code (e.g. INVENTORY, AR, VAT_OUTPUT). Never post by code/name.
-  systemKey String?       @unique
-  active    Boolean       @default(true)
-  lines     JournalLine[]
-  createdAt DateTime      @default(now())
-  bank      BankAccount?
+  systemKey         String?           @unique
+  active            Boolean           @default(true)
+  lines             JournalLine[]
+  createdAt         DateTime          @default(now())
+  bank              BankAccount?
+  pettyCash         PettyCashAccount?
+  expenseCategories ExpenseCategory[]
 }
 
 /// A company bank account (spec §3.4, T8-03). Each one has its own GL account under Cash & Bank.
 model BankAccount {
-  id          String            @id @default(cuid())
-  code        String            @unique
+  id          String                 @id @default(cuid())
+  code        String                 @unique
   name        String
   bankName    String?
   branch      String?
   accountNo   String?
   iban        String?
   swift       String?
-  accountId   String            @unique
-  account     Account           @relation(fields: [accountId], references: [id])
+  accountId   String                 @unique
+  account     Account                @relation(fields: [accountId], references: [id])
   /// Used when a bank payment does not name a bank account.
-  isDefault   Boolean           @default(false)
-  active      Boolean           @default(true)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  isDefault   Boolean                @default(false)
+  active      Boolean                @default(true)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
   supplierPay SupplierPayment[]
   receipts    CustomerReceipt[]
   cheques     Cheque[]
   refunds     Refund[]
+  pettyTopUps PettyCashTransaction[]
 }
 
 model FiscalYear {
@@ -258,20 +262,21 @@ enum TaxType {
 }
 
 model TaxCode {
-  id              String                @id @default(cuid())
-  code            String                @unique
+  id              String                 @id @default(cuid())
+  code            String                 @unique
   name            String
   type            TaxType
-  rate            Decimal               @db.Decimal(5, 2)
+  rate            Decimal                @db.Decimal(5, 2)
   outputAccountId String?
   inputAccountId  String?
-  active          Boolean               @default(true)
+  active          Boolean                @default(true)
   products        Product[]
   poItems         PurchaseOrderItem[]
   invoiceItems    SupplierInvoiceItem[]
   expenses        LandedCostExpense[]
   soItems         SalesOrderItem[]
   piItems         ProformaInvoiceItem[]
+  pettyCash       PettyCashTransaction[]
 }
 
 // ───────────────────────────── Masters ─────────────────────────────
@@ -1282,4 +1287,76 @@ model SupplierAdvanceTransfer {
   @@index([supplierId])
   @@index([fromPurchaseOrderId])
   @@index([toPurchaseOrderId])
+}
+
+// ───────────────────────────── Petty cash (T8-04) ─────────────────────────────
+
+/// A petty cash box. Each box owns one GL account under Cash & Bank (the first one is "Petty Cash" 1120).
+model PettyCashAccount {
+  id           String                 @id @default(cuid())
+  code         String                 @unique
+  name         String
+  /// The person who holds the cash (optional).
+  custodianId  String?
+  custodian    User?                  @relation(fields: [custodianId], references: [id])
+  accountId    String                 @unique
+  account      Account                @relation(fields: [accountId], references: [id])
+  active       Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  transactions PettyCashTransaction[]
+}
+
+/// Expense category mapped to a GL expense account (spec §3.4.5).
+model ExpenseCategory {
+  id           String                 @id @default(cuid())
+  name         String                 @unique
+  accountId    String
+  account      Account                @relation(fields: [accountId], references: [id])
+  active       Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  transactions PettyCashTransaction[]
+}
+
+enum PettyCashType {
+  TOP_UP
+  EXPENSE
+}
+
+/// Cash in (top-up from cash in hand or a bank) or cash out (expense with category and optional input VAT).
+/// Never edited; a wrong one is cancelled with a reason (reverse entry). TD-028.
+model PettyCashTransaction {
+  id                 String           @id @default(cuid())
+  number             String           @unique
+  pettyCashAccountId String
+  pettyCashAccount   PettyCashAccount @relation(fields: [pettyCashAccountId], references: [id])
+  type               PettyCashType
+  date               DateTime         @db.Date
+  /// Total cash in or out (expenses: VAT-inclusive, as on the receipt).
+  amount             Decimal          @db.Decimal(18, 2)
+  /// Top-up source.
+  mode               PaymentMode?
+  bankAccountId      String?
+  bankAccount        BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  /// Expense details.
+  categoryId         String?
+  category           ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  taxCodeId          String?
+  taxCode            TaxCode?         @relation(fields: [taxCodeId], references: [id])
+  netAmount          Decimal          @default(0) @db.Decimal(18, 2)
+  vatAmount          Decimal          @default(0) @db.Decimal(18, 2)
+  payee              String?
+  /// Receipt / bill number from the shop.
+  reference          String?
+  description        String
+  status             ReceiptStatus    @default(POSTED)
+  cancelReason       String?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  createdById        String?
+  createdAt          DateTime         @default(now())
+
+  @@index([pettyCashAccountId, date])
+  @@index([categoryId])
 }

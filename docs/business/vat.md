@@ -50,7 +50,7 @@ Planned (spec §9): `vat_periods`, `vat_adjustments`; TI/CN VAT columns.
 | Landed cost bill (SR / RC) | as above | Done |
 | Tax Invoice | Cr `VAT_OUTPUT` | Planned (Step 5) |
 | Credit note | Dr `VAT_OUTPUT` (VAT adjustment) | Planned (Step 7) |
-| Petty cash expense with input VAT | Dr `VAT_INPUT` | Planned (Step 8) |
+| Petty cash expense with input VAT | Dr `VAT_INPUT` (SR only; amount entered VAT-inclusive, VAT = × 5/105) | Done (T8-04, TD-028) |
 | VAT settlement | `VAT_OUTPUT` / `VAT_INPUT` → `VAT_PAYABLE` | Planned |
 
 ## 8. Inventory impact

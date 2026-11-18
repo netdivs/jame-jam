@@ -1,7 +1,7 @@
 // Idempotent base data: permissions, roles, chart of accounts, tax codes, settings, warehouse, users.
 import bcrypt from "bcryptjs";
 import type { PrismaClient } from "@prisma/client";
-import { CHART_OF_ACCOUNTS, LANDED_COST_CATEGORIES, TAX_CODES } from "./accounting/seed-data";
+import { CHART_OF_ACCOUNTS, EXPENSE_CATEGORIES, LANDED_COST_CATEGORIES, TAX_CODES } from "./accounting/seed-data";
 import { PERMISSIONS, ROLES } from "./rbac";
 
 type Acc = (typeof CHART_OF_ACCOUNTS)[number];
@@ -46,6 +46,16 @@ export async function seedBase(
   const mainBank = await db.account.findUniqueOrThrow({ where: { systemKey: "BANK_MAIN" } });
   if (!(await db.bankAccount.findUnique({ where: { accountId: mainBank.id } }))) {
     await db.bankAccount.create({ data: { id: "bank_main", code: "BANK-0001", name: "Main account", accountId: mainBank.id, isDefault: true } });
+  }
+
+  // First petty cash box on the "Petty Cash" GL account, and default expense categories (T8-04)
+  const petty = await db.account.findUniqueOrThrow({ where: { systemKey: "PETTY_CASH" } });
+  if (!(await db.pettyCashAccount.findUnique({ where: { accountId: petty.id } }))) {
+    await db.pettyCashAccount.create({ data: { id: "petty_main", code: "PETTY-01", name: "Main petty cash", accountId: petty.id } });
+  }
+  for (const c of EXPENSE_CATEGORIES) {
+    const acc = await db.account.findUniqueOrThrow({ where: { systemKey: c.key } });
+    await db.expenseCategory.upsert({ where: { name: c.name }, update: {}, create: { id: `expcat_${c.key.toLowerCase()}`, name: c.name, accountId: acc.id } });
   }
 
   // Tax codes

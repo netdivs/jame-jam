@@ -38,6 +38,7 @@ import {
   HandCoins,
   Banknote,
   Undo2,
+  PiggyBank,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -75,6 +76,7 @@ const ICONS = {
   receipts: HandCoins,
   cheques: Banknote,
   refunds: Undo2,
+  pettyCash: PiggyBank,
 };
 
 function ThemeToggle() {
