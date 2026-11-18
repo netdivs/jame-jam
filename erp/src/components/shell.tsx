@@ -36,6 +36,7 @@ import {
   Landmark,
   ChartColumn,
   HandCoins,
+  Banknote,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -71,6 +72,7 @@ const ICONS = {
   banks: Landmark,
   reports: ChartColumn,
   receipts: HandCoins,
+  cheques: Banknote,
 };
 
 function ThemeToggle() {

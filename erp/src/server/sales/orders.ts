@@ -249,6 +249,10 @@ export async function cancelSalesOrder(ctx: Ctx, id: string, reason: string) {
     if (paid) {
       throw new AppError("VALIDATION", `Proforma ${paid.number} has AED ${D(paid.receivedAmount).toFixed(2)} received. Cancel or refund those receipts before cancelling the sales order.`);
     }
+    if (live.length) {
+      const cheques = await tx.cheque.count({ where: { proformaInvoiceId: { in: live.map((p) => p.id) }, status: { in: ["RECEIVED", "DEPOSITED"] } } });
+      if (cheques > 0) throw new AppError("VALIDATION", "A proforma of this order has cheques not yet cleared. Clear, cancel or replace them before cancelling the sales order.");
+    }
     await lockBuckets(tx, so.items.map((i) => i.balanceId));
     for (const it of so.items) {
       if (!it.reservationId) continue;

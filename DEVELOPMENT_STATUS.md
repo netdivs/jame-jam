@@ -16,7 +16,7 @@
 | 3 | Inventory core (D2, D3) | ✅ Done |
 | 4 | Purchase & import (D5, R3, R6) | ✅ Development complete and verified (17 Nov 2026). Not deployed. Browser-verified (T4-11). Deployment deferred until all steps are done (user, 18 Nov 2026). Still to come: client confirmation of C1/C5/C6 |
 | 5 | Sales: SO, PI, TI (D1, D4, R1) | 🔨 In progress. Sales orders with reservation (D1) and proforma invoices with expiry/renewal (R1) are built and verified. VAT maths (D4) built as the C4 proposal. Tax invoices wait for C4; reservation expiry waits for C2 |
-| 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | 🔨 Started: customer receipts/advances (CR/RV) built. PDC next; allocation and DN wait for the tax invoice (C4) |
+| 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | 🔨 In progress: customer receipts/advances (CR/RV) and post-dated cheques (R5) built. Allocation to invoices and the DN wait for the tax invoice (C4) |
 | 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
 | 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. Ledgers, petty cash, bank reconciliation, refunds to come |
 | 9 | VAT & reports (R7) | ⏳ Not started |
@@ -313,6 +313,12 @@ Done without waiting for client decisions, in this order: T8-03 → T8-02 → T8
 **Independent code review (18 Nov 2026):** one Major defect (duplicate SO line id in an edit) and one rule gap (paid proforma could be cancelled) fixed with regression tests; six Minor items fixed (see CHANGELOG). Remaining nits: the reversal audit row has no `before`; partial-PI discount shares can differ from the SO by a few fils (PIs post nothing — the tax invoice must recompute from the SO); a PI can be backdated so it is born expired.
 
 **Verification (18 Nov 2026, after the review fixes):** typecheck, lint and build pass; Vitest 77/77; no migration drift; Playwright 6/6 twice (purchase; sales with receipts; accounts — desktop and Pixel 7). The job runner ran twice on the E2E database: first run OK (stock = GL, difference 0), second run skipped every job.
+
+## 6d. Post-dated cheques ✅ (T6-02, T6-04 — 18 Nov 2026)
+
+`/pdc` register, record received (Sales, Accountant, Owner) and issued (Accountant, Owner) cheques, detail page with deposit / clear / bounce (+ bank charges) / cancel / replace (`pdc.manage`: Owner, Accountant), status history, GL entries (TD-026). Dashboard widget for cheques due within `pdcReminderDays`; daily `pdc-due` job also checks register = PDC GL. Not yet: issued cheques against landed cost bills, PDC receipt PDF, allocation to tax invoices.
+
+**Verification:** Vitest 82/82; Playwright 8/8 twice (purchase, sales + receipts, accounts, PDC — desktop and Pixel 7); typecheck, lint, build, no drift.
 
 ## 7. Deployment
 

@@ -51,6 +51,7 @@ export const PERMISSIONS = {
   "journal.post": "Post and reverse manual journal vouchers",
   "reports.financial": "View financial reports (trial balance, profit & loss, balance sheet)",
   "jobs.run": "View scheduled job runs and run them now",
+  "pdc.manage": "Deposit, clear, bounce, cancel and replace post-dated cheques",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -70,7 +71,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     description: "Runs operations; approves returns and POs",
     // Spec §5: Manager only views payments, receipts, bank and journals.
     permissions: ALL.filter(
-      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post"].includes(p),
+      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage"].includes(p),
     ),
   },
   {
@@ -102,6 +103,7 @@ export const ROLES: { key: string; name: string; description: string; permission
       "bank.manage",
       "journal.post",
       "reports.financial",
+      "pdc.manage",
     ],
   },
   {

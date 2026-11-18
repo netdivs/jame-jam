@@ -7,6 +7,7 @@ import { Prisma } from "@prisma/client";
 import { AppError, Ctx, assertCan, prisma, systemCtx, today } from "../core";
 import { expireProformaInvoices } from "../sales/proformas";
 import { inventoryReconciliation } from "../inventory/queries";
+import { chequesDue, pdcReconciliation } from "../receipts/cheques";
 
 type JobResult = { status: "OK" | "WARNING"; result: Record<string, unknown> };
 
@@ -26,6 +27,23 @@ export const JOBS: Record<string, { title: string; run: (asOf: Date, ctx: Ctx) =
       return {
         status: r.difference.isZero() ? "OK" : "WARNING",
         result: { stockValue: r.stockValue.toString(), glValue: r.glValue.toString(), difference: r.difference.toString() },
+      };
+    },
+  },
+  "pdc-due": {
+    title: "List open cheques due within the reminder days (dashboard reminder) and check the PDC register = PDC GL",
+    run: async (asOf) => {
+      const settings = await prisma.companySetting.findUniqueOrThrow({ where: { id: 1 } });
+      const due = await chequesDue(asOf, settings.pdcReminderDays);
+      const rec = await pdcReconciliation();
+      return {
+        status: rec.ok ? "OK" : "WARNING",
+        result: {
+          dueWithinDays: settings.pdcReminderDays,
+          due: due.filter((c) => c.dueDate >= asOf).length,
+          overdue: due.filter((c) => c.dueDate < asOf).length,
+          registerMatchesGl: rec.ok,
+        },
       };
     },
   },

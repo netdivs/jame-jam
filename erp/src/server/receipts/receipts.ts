@@ -45,7 +45,8 @@ export async function recordCustomerReceipt(ctx: Ctx, raw: unknown) {
       customerId = pi.customerId;
       if (date < pi.date) throw new AppError("VALIDATION", `The receipt cannot be dated before proforma ${pi.number} (${pi.date.toISOString().slice(0, 10)})`);
       assertPiUsable(pi, "Receiving payment", date > today() ? date : today());
-      const open = D(pi.total).minus(pi.receivedAmount);
+      const pendingCheques = D((await tx.cheque.aggregate({ where: { proformaInvoiceId: pi.id, status: { in: ["RECEIVED", "DEPOSITED"] } }, _sum: { amount: true } }))._sum.amount ?? 0);
+      const open = D(pi.total).minus(pi.receivedAmount).minus(pendingCheques);
       if (amount.gt(open)) {
         throw new AppError("VALIDATION", `Proforma ${pi.number} has AED ${open.toFixed(2)} left to receive (total AED ${D(pi.total).toFixed(2)})`, { fields: { amount: `At most ${open.toFixed(2)}` } });
       }

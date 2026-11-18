@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Card, LinkButton, PageHeader, Stat, Table } from "@/components/ui";
 import { requireUser } from "@/server/auth";
-import { D, prisma, sum } from "@/server/core";
+import { D, prisma, sum, today } from "@/server/core";
+import { chequesDue } from "@/server/receipts/cheques";
 import { inventoryReconciliation, listMovements, stockByProduct } from "@/server/inventory/queries";
 import { fmtAED, fmtDate, fmtSqm, titleCase } from "@/lib/format";
 
@@ -42,6 +43,7 @@ export default async function Dashboard() {
         subtitle={`${user.roleName} · ${fmtDate(new Date())}`}
         actions={can("inventory.openingStock") && <LinkButton href="/inventory/lots/new">Enter opening stock</LinkButton>}
       />
+      {can("receipts.view") && <PdcDue issued={can("purchase.view")} />}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Available stock" value={`${fmtSqm(onHand.minus(reserved))} SQM`} hint={`${fmtSqm(onHand)} physical · ${fmtSqm(reserved)} reserved`} />
         <Stat label="Slabs in stock" value={count("AVAILABLE") + count("RESERVED") + count("PARTIALLY_SOLD")} hint={`${count("RESERVED")} reserved · ${count("PARTIALLY_SOLD")} partly sold`} />
@@ -102,3 +104,30 @@ export default async function Dashboard() {
     </>
   );
 }
+
+/** Open post-dated cheques due within the reminder days (spec §3.4.4 due-date monitoring). */
+async function PdcDue({ issued }: { issued: boolean }) {
+  const settings = await prisma.companySetting.findUniqueOrThrow({ where: { id: 1 } });
+  const now = today();
+  const due = (await chequesDue(now, settings.pdcReminderDays)).filter((c) => issued || c.direction === "RECEIVED");
+  if (due.length === 0) return null;
+  return (
+    <Card title={`Cheques due within ${settings.pdcReminderDays} days (${due.length})`} actions={<Link href="/pdc?due=week" className="text-xs text-primary">PDC register</Link>} className="mb-5" pad={false}>
+      <Table>
+        <tbody>
+          {due.slice(0, 6).map((c) => (
+            <tr key={c.id}>
+              <td className="whitespace-nowrap">
+                <Link href={`/pdc/${c.id}`} className="font-medium text-primary hover:underline">{c.number}</Link>
+              </td>
+              <td>{c.direction === "RECEIVED" ? "From" : "To"} {c.customer?.name ?? c.supplier?.name}</td>
+              <td className={`whitespace-nowrap ${c.dueDate < now ? "font-medium text-danger" : ""}`}>{fmtDate(c.dueDate)}</td>
+              <td className="num">{fmtAED(c.amount)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
+

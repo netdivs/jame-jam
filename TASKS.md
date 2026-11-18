@@ -50,9 +50,9 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
 | T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | PARTIAL: receipts and advances (with PI link) done; allocation to TIs waits for T5-06 (C4) | O | Payment status = total − allocations | H R P G A |
-| T6-02 | PDC received/issued with status history and GL (PDC_RECEIVABLE/PAYABLE) | High | T6-01, T8-03 | PLANNED | O | R5; PDC counts as payment only when cleared | H R P G A |
+| T6-02 | PDC received/issued with status history and GL (PDC_RECEIVABLE/PAYABLE) | High | T6-01, T8-03 | DONE (received + issued against a PO; issued against landed cost bills not yet) | O | R5; PDC counts as payment only when cleared | H R P G A |
 | T6-03 | DN: only when TI fully paid (BD-15); consume reservation, Dr COGS / Cr INVENTORY; partial dispatch | High | T6-01 | PLANNED | O | R10 | H R P G S A |
-| T6-04 | PDC due reminders job + dashboard widget | Med | T6-02, TJ-01 | PLANNED | O/K | Reminder N days ahead (`pdcReminderDays`) | H |
+| T6-04 | PDC due reminders job + dashboard widget | Med | T6-02, TJ-01 | DONE (dashboard widget + daily pdc-due job; no email/SMS by scope) | O/K | Reminder N days ahead (`pdcReminderDays`) | H |
 | T6-05 | Receipts/PDC/DN UI incl. mobile DN confirmation | High | T6-01…03 | PLANNED | K | — | E2E |
 
 ## Step 7 — Returns & Credit Notes

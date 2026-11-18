@@ -222,6 +222,8 @@ export async function closeProformaInvoice(ctx: Ctx, id: string, kind: "CLOSED" 
     if (D(pi.receivedAmount).gt(0)) {
       throw new AppError("VALIDATION", `Proforma ${pi.number} has AED ${D(pi.receivedAmount).toFixed(2)} received. Cancel or refund those receipts first (TD-025).`);
     }
+    const cheques = await tx.cheque.count({ where: { proformaInvoiceId: pi.id, status: { in: ["RECEIVED", "DEPOSITED"] } } });
+    if (cheques > 0) throw new AppError("VALIDATION", `Proforma ${pi.number} has ${cheques} cheque(s) not yet cleared. Clear, cancel or replace them first (TD-025).`);
     const after = await tx.proformaInvoice.update({ where: { id }, data: { status: kind, closeReason: why } });
     await audit(tx, ctx, { action: kind === "CLOSED" ? "close" : "cancel", entity: "ProformaInvoice", entityId: id, before: { status: pi.status }, after: { status: kind, reason: why } });
     return after;

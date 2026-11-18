@@ -63,9 +63,11 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
       if (!LIVE.includes(po.status)) throw new AppError("VALIDATION", `PO ${po.number} must be approved before it can be paid`);
       const invoiced = D((await tx.supplierInvoice.aggregate({ where: { purchaseOrderId: po.id }, _sum: { total: true } }))._sum.total ?? 0);
       const cap = Dec.max(D(po.total), invoiced);
-      const open = cap.minus(po.paidAmount);
+      // Cheques issued against the PO but not yet cleared are already promised (T6-02).
+      const pendingCheques = D((await tx.cheque.aggregate({ where: { purchaseOrderId: po.id, status: "ISSUED" }, _sum: { amount: true } }))._sum.amount ?? 0);
+      const open = cap.minus(po.paidAmount).minus(pendingCheques);
       if (amount.gt(open)) {
-        throw new AppError("VALIDATION", `PO ${po.number} can be paid at most AED ${open.toFixed(2)} more (total AED ${cap.toFixed(2)}, paid AED ${D(po.paidAmount).toFixed(2)})`, {
+        throw new AppError("VALIDATION", `PO ${po.number} can be paid at most AED ${open.toFixed(2)} more (total AED ${cap.toFixed(2)}, paid AED ${D(po.paidAmount).toFixed(2)}${pendingCheques.gt(0) ? `, cheques not yet cleared AED ${pendingCheques.toFixed(2)}` : ""})`, {
           fields: { amount: `At most ${open.toFixed(2)}` },
         });
       }

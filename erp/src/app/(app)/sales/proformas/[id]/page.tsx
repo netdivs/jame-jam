@@ -33,7 +33,16 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
           </span>
         }
         back={{ href: "/sales/proformas", label: "Proforma invoices" }}
-        actions={status === "ACTIVE" && has("receipts.create") && D(pi.total).gt(pi.receivedAmount) && <LinkButton href={`/receipts/new?pi=${pi.id}`}>Record receipt</LinkButton>}
+        actions={
+          status === "ACTIVE" &&
+          has("receipts.create") &&
+          D(pi.total).gt(pi.receivedAmount) && (
+            <>
+              <LinkButton href={`/receipts/new?pi=${pi.id}`}>Record receipt</LinkButton>
+              <LinkButton href={`/pdc/new?direction=RECEIVED&pi=${pi.id}`} variant="secondary">Record cheque</LinkButton>
+            </>
+          )
+        }
       />
 
       {status === "EXPIRED" && (

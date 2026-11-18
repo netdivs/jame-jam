@@ -194,6 +194,7 @@ model BankAccount {
   updatedAt   DateTime          @updatedAt
   supplierPay SupplierPayment[]
   receipts    CustomerReceipt[]
+  cheques     Cheque[]
 }
 
 model FiscalYear {
@@ -306,6 +307,7 @@ model Customer {
   salesOrders      SalesOrder[]
   proformas        ProformaInvoice[]
   receipts         CustomerReceipt[]
+  cheques          Cheque[]
 }
 
 enum SupplierType {
@@ -332,6 +334,7 @@ model Supplier {
   invoices      SupplierInvoice[]
   payments      SupplierPayment[]
   expenses      LandedCostExpense[]
+  cheques       Cheque[]
 }
 
 enum ProductType {
@@ -671,6 +674,7 @@ model PurchaseOrder {
   payments            SupplierPayment[]
   expenses            LandedCostExpense[]
   lots                Lot[]
+  cheques             Cheque[]
 
   @@index([supplierId])
   @@index([status])
@@ -1033,6 +1037,7 @@ model ProformaInvoice {
   updatedAt       DateTime              @updatedAt
   items           ProformaInvoiceItem[]
   receipts        CustomerReceipt[]
+  cheques         Cheque[]
 
   @@index([salesOrderId])
   @@index([status, expiryDate])
@@ -1123,4 +1128,78 @@ model JobRun {
 
   @@unique([job, runKey])
   @@index([startedAt])
+}
+
+// ───────────────────────────── Post-dated cheques (T6-02) ─────────────────────────────
+
+enum ChequeDirection {
+  RECEIVED
+  ISSUED
+}
+
+/// Spec §3.4.4: Received/Issued → Deposited → Cleared / Bounced / Cancelled / Replaced.
+enum ChequeStatus {
+  RECEIVED
+  ISSUED
+  DEPOSITED
+  CLEARED
+  BOUNCED
+  CANCELLED
+  REPLACED
+}
+
+model Cheque {
+  id                String              @id @default(cuid())
+  /// PDC-YYNNNN
+  number            String              @unique
+  direction         ChequeDirection
+  chequeNo          String
+  /// Received: the customer's bank. Issued: our bank account (bankAccountId).
+  bankName          String?
+  branch            String?
+  amount            Decimal             @db.Decimal(18, 2)
+  /// Date the cheque was handed over / written.
+  issueDate         DateTime            @db.Date
+  /// Date on the cheque: it cannot clear before this.
+  dueDate           DateTime            @db.Date
+  customerId        String?
+  customer          Customer?           @relation(fields: [customerId], references: [id])
+  supplierId        String?
+  supplier          Supplier?           @relation(fields: [supplierId], references: [id])
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice?    @relation(fields: [proformaInvoiceId], references: [id])
+  purchaseOrderId   String?
+  purchaseOrder     PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  /// Received: the bank it was deposited into. Issued: the bank it is drawn on.
+  bankAccountId     String?
+  bankAccount       BankAccount?        @relation(fields: [bankAccountId], references: [id])
+  status            ChequeStatus
+  remarks           String?
+  bounceReason      String?
+  replacesId        String?             @unique
+  replaces          Cheque?             @relation("ChequeReplacement", fields: [replacesId], references: [id])
+  replacedBy        Cheque?             @relation("ChequeReplacement")
+  createdById       String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  history           ChequeStatusEvent[]
+
+  @@index([direction, status, dueDate])
+  @@index([customerId])
+  @@index([supplierId])
+}
+
+/// Every status change with its date, user and remarks (spec §3.4.4).
+model ChequeStatusEvent {
+  id         String        @id @default(cuid())
+  chequeId   String
+  cheque     Cheque        @relation(fields: [chequeId], references: [id], onDelete: Cascade)
+  fromStatus ChequeStatus?
+  toStatus   ChequeStatus
+  date       DateTime      @db.Date
+  remarks    String?
+  userId     String?
+  createdAt  DateTime      @default(now())
+
+  @@index([chequeId])
 }

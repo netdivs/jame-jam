@@ -14,6 +14,12 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - Migrations (additive): `bank_accounts` (with backfill of the main bank), `customer_receipts`, `job_runs`, `purchase_tax_reason`.
 - Tests: 74 Vitest; Playwright 6 (purchase, sales with receipts, accounts — desktop and mobile).
 
+### Added — post-dated cheques (T6-02, T6-04; not deployed)
+- Received and issued PDCs with full status history: received/issued → deposited → cleared / bounced (optional bank charges) / cancelled / replaced.
+- GL per spec §3.4.4 (TD-026); a cheque is payment only once cleared; open cheques count against PI and PO limits.
+- PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
+- Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
+
 ### Fixed — code review (18 Nov 2026)
 - Editing a sales order with the same line twice is refused (it could corrupt totals and leave stock reserved).
 - A proforma holding money cannot be closed or cancelled, nor its sales order cancelled, until the receipts are cancelled (TD-025).

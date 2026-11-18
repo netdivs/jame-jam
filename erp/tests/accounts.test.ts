@@ -172,12 +172,12 @@ describe("scheduled jobs (TJ-01)", () => {
     const asOf = toDateOnly("2027-06-30"); // far enough ahead that every unpaid test PI is past its validity
     const due = await prisma.proformaInvoice.count({ where: { status: "ACTIVE", receivedAmount: 0, expiryDate: { lt: asOf } } });
     const first = await runDailyJobs(asOf);
-    expect(first.map((o) => o.status)).toEqual(["OK", "OK", "OK"]);
+    expect(first.map((o) => o.status)).toEqual(["OK", "OK", "OK", "OK"]);
     expect(first.find((o) => o.job === "pi-expiry")?.result).toEqual({ expired: due });
     expect(first.find((o) => o.job === "stock-gl-check")?.result).toMatchObject({ difference: "0" });
     const second = await runDailyJobs(asOf);
     expect(second.every((o) => o.status === "SKIPPED")).toBe(true);
-    expect(await prisma.jobRun.count({ where: { runKey: "2027-06-30" } })).toBe(3);
+    expect(await prisma.jobRun.count({ where: { runKey: "2027-06-30" } })).toBe(4);
 
     await expectError(runJobNow(await ctxFor("sales"), "pi-expiry"), "FORBIDDEN");
     const manual = await runJobNow(await ctxFor("manager"), "session-cleanup");
