@@ -34,16 +34,16 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance criteria | Tests |
 |---|---|---|---|---|---|---|---|
-| T5-01 | Schema: SalesOrder(+Item), ProformaInvoice(+Item), TaxInvoice(+Item); `salesOrderId` NOT NULL on PI/TI; customer snapshot; price mode | High | Step 4 DONE | PLANNED | C (schema owner) | Additive migration; no drift | migration |
-| T5-02 | SO service: create/edit/cancel with reservation via `reserveStock`/`releaseReservation`; status Open → Partially Invoiced → Invoiced → Delivered → Closed/Cancelled | High | T5-01 | PLANNED | O | D1: reserve on save; edit adjusts; cancel releases; no double reservation | H R P C S A |
+| T5-01 | Schema: SalesOrder(+Item), ProformaInvoice(+Item), TaxInvoice(+Item); `salesOrderId` NOT NULL on PI/TI; customer snapshot; price mode | High | Step 4 DONE | DONE (SO + PI; TI schema with T5-06) | C (schema owner) | Additive migration; no drift | migration |
+| T5-02 | SO service: create/edit/cancel with reservation via `reserveStock`/`releaseReservation`; status Open → Partially Invoiced → Invoiced → Delivered → Closed/Cancelled | High | T5-01 | DONE (expiry waits for T5-03/C2) | O | D1: reserve on save; edit adjusts; cancel releases; no double reservation | H R P C S A |
 | T5-03 | SO reservation expiry job + extension (`so.extendReservation`) | High | T5-02, **C2** | BLOCKED (C2) | O | Auto-release after validity; extension audited | H R P A |
-| T5-04 | VAT engine: inclusive/exclusive line maths per spec §3.3.4, discounts, no round-off | High | **C4** | BLOCKED (C4) | C | 81.72 × 100.00 incl → 8,172.00 / 389.14 / 7,782.86; Σnet + ΣVAT = total | H R (property tests) |
-| T5-05 | PI service: create from SO only; validity from `piValidityDays`; expire job; renew (`pi.renew`); close/cancel; no GL | High | T5-02 | PLANNED | O | R1 | H R P A |
+| T5-04 | VAT engine: inclusive/exclusive line maths per spec §3.3.4, discounts, no round-off | High | **C4** | BUILT as C4 proposal; sign-off BLOCKED (C4) | C | 81.72 × 100.00 incl → 8,172.00 / 389.14 / 7,782.86; Σnet + ΣVAT = total | H R (property tests) |
+| T5-05 | PI service: create from SO only; validity from `piValidityDays`; expire job; renew (`pi.renew`); close/cancel; no GL | High | T5-02 | DONE (job wiring waits for TJ-01) | O | R1 | H R P A |
 | T5-06 | TI service: from SO (or PI); FTA fields; post Dr AR / Cr SALES, Cr VAT_OUTPUT; reservation moves with invoiced qty; partial invoicing | High | T5-02, T5-04 | BLOCKED (C4) | O | D1, D4; backend rejects TI without SO | H R P G A |
 | T5-07 | Customer advance auto knock-off on TI (from PI-referenced receipts) | Med | T6-01 | PLANNED | O | Advance applied; payment status updated | H G |
-| T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | PLANNED | K | Mobile usable; mirrors backend errors | HTTP/E2E |
-| T5-09 | `taxCode.change` permission + reason for non-SR codes on sales (and purchase) lines (F12) | Med | T5-01 | PLANNED | O | Spec §3.3.5; audited | R P A |
-| T5-10 | Sales permissions in `rbac.ts` (spec §5 matrix) | High | — | PLANNED | C | Matrix tests per role | P |
+| T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | PARTIAL: SO + PI screens done; TI screens with T5-06 | K | Mobile usable; mirrors backend errors | HTTP/E2E |
+| T5-09 | `taxCode.change` permission + reason for non-SR codes on sales (and purchase) lines (F12) | Med | T5-01 | PARTIAL: enforced on sales lines; purchase lines still open | O | Spec §3.3.5; audited | R P A |
+| T5-10 | Sales permissions in `rbac.ts` (spec §5 matrix) | High | — | DONE | C | Matrix tests per role | P |
 
 ## Step 6 — Receipts, PDC, Delivery Notes
 

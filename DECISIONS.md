@@ -45,8 +45,8 @@ If the client answers differently, record a new entry and mark the old one `Supe
 
 | ID | Question | Proposed answer | Blocks | Impact if unresolved |
 |---|---|---|---|---|
-| C2 | What releases an SO's reservation if no invoice follows? | Reservation validity (default = PI validity, 15 days, setting `soReservationDays` already exists); daily auto-release; Owner/Manager can extend; no auto-expiry once a PI has an advance | **Step 5** (SO reservation lifecycle) | Stock can be held indefinitely |
-| C4 | VAT-inclusive calculation method and invoice presentation | Per line `VAT = round(gross × 5/105, 2)`, net = gross − VAT; totals are sums of lines; print unit price excl. VAT plus an inclusive reference column | **Step 5** (TI engine and print) | TI totals/VAT cannot be finalised |
+| C2 | What releases an SO's reservation if no invoice follows? | Reservation validity (default = PI validity, 15 days, setting `soReservationDays` already exists); daily auto-release; Owner/Manager can extend; no auto-expiry once a PI has an advance | **Step 5** (T5-03 expiry/extension) | Stock can be held indefinitely. SOs are built without expiry (`reservationExpiresAt` stays empty) until answered |
+| C4 | VAT-inclusive calculation method and invoice presentation | Per line `VAT = round(gross × 5/105, 2)`, net = gross − VAT; totals are sums of lines; print unit price excl. VAT plus an inclusive reference column | **Step 5** (TI posting and print, T5-06) | TI totals/VAT cannot be finalised. The proposed maths is built as a pure module (`server/sales/vat.ts`) and used for SO/PI previews and totals; it is labelled pending and no TI is posted until C4 is confirmed |
 | C7 | Credit note on a fully paid TI: refund or customer credit? | Credited amount becomes a customer advance; refunds by a separate manual voucher | **Step 7** (CN posting) | CN accounting undefined |
 | OI-15 | Legal name, TRN, bank details | Placeholders until after the demo | Production go-live, printed documents | Documents show placeholders |
 | OI-16 | Demo delivery date | — | Planning | Milestone dates cannot be fixed |
@@ -86,6 +86,9 @@ If the client answers differently, record a new entry and mark the old one `Supe
 | TD-014 | Model-agnostic agent setup: `AGENTS.md` is the shared instruction source; portable skills in `skills/<name>/SKILL.md`; Claude-specific wrappers only in `.claude/` | Several agent tools; no single provider required | 17 Nov 2026 | Confirmed |
 | TD-015 | Track `.claude/agents/` and `.claude/skills/` in git (shared project config); keep `.claude/settings.local.json` and other local Claude files ignored | Previously all of `.claude/` was ignored, which hid shared configuration | 17 Nov 2026 | Confirmed |
 | TD-016 | PO goods status (Draft … Received → Closed / Cancelled) and payment status (Unpaid/Partial/Paid) are separate fields, instead of the single spec list that includes Invoiced and Paid | A PO can be paid before it is received (C1), so one linear status cannot represent both | 17 Nov 2026 | Confirmed (review with client with C1) |
+| TD-017 | Sales invoice-level discount is spread over the lines by largest remainder (in fils), weighted by each line's amount after its line discount, before VAT is computed per line | Spec §3.3.4: discounts per line and/or invoice, VAT always after discount, no round-off; spreading keeps Σ net + Σ VAT = total exactly | 18 Nov 2026 | Confirmed (technical) |
+| TD-018 | An SO cannot be edited while an Active or Expired proforma quotes it; close or cancel the PI first. Open PI quantity + invoiced quantity can never exceed the SO line | A PI sent to the customer must not change silently; prevents two PIs quoting the same SQM | 18 Nov 2026 | Confirmed (technical; review with client in Step 5 UAT) |
+| TD-019 | Sales permissions: `sales.view/edit/cancel`, `sales.renewPi`, `sales.extendReservation`, `taxCode.change`. Sales Staff get view + edit (no cancel), per spec §5 "Create/Edit"; Accountant and Storekeeper view; Accountant also `taxCode.change` | Spec §5 matrix | 18 Nov 2026 | Confirmed (follows the spec matrix, itself a 💡 proposal) |
 
 ## 5. Superseded
 

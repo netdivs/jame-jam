@@ -2,7 +2,7 @@
 
 Purpose: hold stock for a Sales Order so no other order can take it, and release or consume it later.
 
-**Implementation status:** Partial. Reservation engine Done (Step 3); Sales Order integration Planned (Step 5); reservation expiry Blocked by C2.
+**Implementation status:** Partial. Reservation engine Done (Step 3); Sales Order integration Done (Step 5); reservation expiry Blocked by C2.
 
 ## 1. Business purpose
 
@@ -67,7 +67,7 @@ Audited today: `reserve`, `release`, `expire` (entity `StockReservation`, with b
 | Reserve with row lock, no double allocation | Done | `reserveStock`; concurrency test |
 | Full/partial release | Done | `releaseReservation` |
 | Consume on dispatch | Done (helper) | `consumeReservation`; no DN yet |
-| Reservation from an SO | Planned (Step 5) | — |
+| Reservation from an SO | Done (Step 5) | `sales/orders.ts`; `tests/sales.test.ts` |
 | Expiry job / extension | Blocked by C2 | `soReservationDays` setting only |
 | "Reservations by SO" report | Planned (Step 9) | — |
 

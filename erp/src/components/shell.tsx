@@ -31,6 +31,8 @@ import {
   FileText,
   Wallet,
   Coins,
+  ClipboardCheck,
+  ScrollText,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -61,6 +63,8 @@ const ICONS = {
   supplierInvoices: FileText,
   supplierPayments: Wallet,
   landedCosts: Coins,
+  salesOrders: ClipboardCheck,
+  proformas: ScrollText,
 };
 
 function ThemeToggle() {

@@ -1,6 +1,6 @@
 # Jame Jam ERP: Development Status
 
-**Last updated:** 17 Nov 2026 (Step 4 completion verified)
+**Last updated:** 18 Nov 2026 (Step 5 sales orders and proforma invoices built on `feat/step5-sales`)
 **Spec:** `requirements/jame_jam_erp_system_technical_specification.md` (v2.4)
 **Repo:** `git@github.com:netdivs/jame-jam.git`, branch `main`
 **Live (demo):** https://jame.netdivs.us
@@ -15,7 +15,7 @@
 | 2 | Masters | ✅ Done |
 | 3 | Inventory core (D2, D3) | ✅ Done |
 | 4 | Purchase & import (D5, R3, R6) | ✅ Development complete and verified (17 Nov 2026). Not deployed. Browser-verified (T4-11). Deployment deferred until all steps are done (user, 18 Nov 2026). Still to come: client confirmation of C1/C5/C6 |
-| 5 | Sales: SO, PI, TI (D1, D4, R1) | ⏳ Not started |
+| 5 | Sales: SO, PI, TI (D1, D4, R1) | 🔨 In progress. Sales orders with reservation (D1) and proforma invoices with expiry/renewal (R1) are built and verified. VAT maths (D4) built as the C4 proposal. Tax invoices wait for C4; reservation expiry waits for C2 |
 | 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | ⏳ Not started |
 | 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
 | 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done (chart of accounts, journals, period lock are in Foundation) |
@@ -282,6 +282,22 @@ It ended with these reconciliations, all passing:
 5. Known gap F5: a supplier advance left over when the invoice is lower than the amount paid has no refund path yet (T4-15, needs Step 8 refunds).
 
 ---
+
+## 6b. Step 5: Sales 🔨 in progress (D1, D4, R1)
+
+Branch `feat/step5-sales` (not merged, not deployed). Migration `20261118060245_sales_orders_proforma` (additive: SalesOrder, SalesOrderItem, ProformaInvoice, ProformaInvoiceItem).
+
+**Built and verified:**
+- **Permissions (T5-10):** `sales.view`, `sales.edit`, `sales.cancel`, `sales.renewPi`, `sales.extendReservation`, `taxCode.change` per spec §5 (TD-019).
+- **Sales orders (T5-02):** stock is reserved when the SO is saved (`reserveStock`); editing adjusts reservations; cancelling (Owner/Manager, reason required) releases them and cancels live proformas. Lock order SO → buckets (sorted) → reservations. Customer details snapshotted. Price mode defaults to the company setting (VAT-inclusive); a document can switch.
+- **Tax codes on sales lines (T5-09, sales part):** anything other than SR needs `taxCode.change` and a reason; reverse charge is refused on sales.
+- **VAT maths (T5-04):** `server/sales/vat.ts`, the spec §3.3.4 method — **C4 proposal, pending client confirmation**. Line and invoice discounts before VAT (TD-017); totals are sums of lines.
+- **Proforma invoices (T5-05):** only from an SO; expiry = PI date + `piValidityDays`; past expiry it is treated as Expired everywhere (`effectivePiStatus`, `assertPiUsable`); `expireProformaInvoices` is ready for the daily job (TJ-01); renewal by Owner/Manager, audited; close/cancel with reason. No accounting. An SO cannot be edited while a live PI quotes it (TD-018).
+- **Screens (T5-08, SO/PI part):** Sales menu; SO list/new/edit/detail with a stock picker (available SQM per slab/lot) and an exact totals preview; PI list (expired filter and banner) and detail with renew/close/cancel.
+
+**Verification (18 Nov 2026):** typecheck, lint and build pass; Vitest 62/62 (16 new sales tests: spec example 81.72 × 100 → 8,172.00 / 389.14 / 7,782.86, 300 random documents reconcile, concurrent SOs never double-reserve, edit/cancel figures, permissions, tax code rule, PI expiry/renewal/no GL); no migration drift; Playwright 4/4 (purchase and sales flows, desktop and Pixel 7). Stock = Inventory GL is unchanged by SOs and PIs (no stock moves until the DN).
+
+**Still open in Step 5:** T5-03 SO reservation expiry/extension (C2), T5-06 tax invoice and its posting (C4), T5-07 advance knock-off (needs Step 6 receipts), T5-08 TI screens, T5-09 for purchase lines, TJ-01 job runner for PI expiry.
 
 ## 7. Deployment
 

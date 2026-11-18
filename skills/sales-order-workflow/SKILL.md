@@ -5,7 +5,7 @@ description: Rules and build plan for Sales Order → reservation → Proforma I
 
 # Sales Order Workflow
 
-**Status: available for future use** — sales documents are **not implemented yet** (Step 5, PLANNED). The reservation engine it builds on is built and tested.
+**Status:** sales orders, proforma invoices and the VAT module are built (`erp/src/server/sales/`); the Tax Invoice (T5-06, C4) and reservation expiry (T5-03, C2) are not.
 
 ## Purpose
 Give the Step 5 implementer the exact rules and the existing helpers to build on, so the SO/PI/TI services match the spec and the confirmed decisions.
@@ -32,7 +32,7 @@ Spec §3.3.1–3.3.4, §3.3.6, §11.1 D1/D4, §11.2 R1; DECISIONS BD-01, BD-04, 
 5. **Tests**: PI/TI without SO rejected; reservation created on save; concurrent SOs cannot reserve the same SQM; edit/cancel figures correct (D1); inclusive rounding multi-line with discounts reconciles (D4); expiry date math and blocked use of expired PI (R1); unauthorized roles rejected; reconciliation.
 
 ## Constraints
-- **Not implemented yet** — docs must say Planned until built.
+- Tax invoices are not built yet — docs must say Planned until they are.
 - Do not finalise TI totals or print layout as approved while C4 is pending.
 - Credit sales are disabled (`creditSalesEnabled = false`); do not enable credit flows.
 - No business rule in the SO form; client totals are previews.

@@ -4,6 +4,18 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 
 ## [Unreleased]
 
+### Added — Step 5 Sales, part 1 (not deployed)
+- Sales orders that reserve stock on save; editing adjusts and cancelling releases the reservations.
+- Proforma invoices from a sales order: validity from settings, expiry (job-ready), audited renewal, close/cancel. No accounting.
+- Sales VAT maths (VAT-inclusive default, exclusive per document, line and invoice discounts) — C4 proposal, pending client confirmation.
+- Non-SR tax codes on sales lines need the new "Change tax code" permission and a reason.
+- Sales menu: sales order and proforma lists, forms and detail pages; mobile layouts.
+- New permissions: `sales.*`, `taxCode.change`. Migration `20261118060245_sales_orders_proforma` (additive).
+- Tests: 16 sales tests (62 in total); Playwright sales flow on desktop and mobile.
+
+### Fixed — testing
+- Purchase E2E waited too little after "Mark Collected" and could fail intermittently.
+
 ### Added — Step 4 Purchase & Import (not deployed)
 - Purchase orders with a configurable approval rule (C6 proposal), rejection to draft, and cancellation.
 - Shipments: Ordered → In Transit → At Port → Collected → Received.

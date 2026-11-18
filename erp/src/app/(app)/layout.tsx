@@ -30,6 +30,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         : [],
     },
     {
+      label: "Sales",
+      items: has("sales.view")
+        ? [
+            { href: "/sales/orders", label: "Sales orders", icon: "salesOrders" },
+            { href: "/sales/proformas", label: "Proforma invoices", icon: "proformas" },
+          ]
+        : [],
+    },
+    {
       label: "Purchase",
       items: [
         ...(has("purchase.view")

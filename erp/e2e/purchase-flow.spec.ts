@@ -108,7 +108,10 @@ test("purchase & import flow, end to end", async ({ page }, info) => {
   async function receive(shipmentLabel: string, slabs: string, tileSqm: string) {
     await loginAs(page, "store");
     await page.goto(poUrl);
+    const before = await page.getByRole("button", { name: "Mark Collected" }).count();
     await page.getByRole("button", { name: "Mark Collected" }).first().click();
+    // Wait for the server action: the link is already visible before it finishes.
+    await expect(page.getByRole("button", { name: "Mark Collected" })).toHaveCount(before - 1);
     await expect(page.getByRole("link", { name: "Receive goods (GRN)" })).toBeVisible();
     await page.getByRole("link", { name: "Receive goods (GRN)" }).click();
     await page.getByLabel("Shipment *").selectOption({ label: shipmentLabel });

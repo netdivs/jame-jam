@@ -2,7 +2,7 @@
 
 Purpose: Sales Order (with stock reservation), Proforma Invoice (with automatic expiry) and Tax Invoice (VAT-inclusive pricing).
 
-**Implementation status:** Planned (Step 5). SO reservation lifecycle Blocked by C2; TI calculation and print Blocked by C4.
+**Implementation status:** Partial (Step 5, branch `feat/step5-sales`). Sales orders with reservation and proforma invoices with expiry/renewal are built; VAT maths built as the C4 proposal; Tax Invoice Planned (blocked by C4); reservation expiry blocked by C2.
 
 ## 1. Business purpose
 
@@ -38,7 +38,7 @@ Sales Order → Stock Reservation → PI and/or TI → Full Payment → DN → G
 
 ## 5. Validation rules (backend)
 
-None yet. Required: SO link NOT NULL on PI/TI; reservation via `reserveStock`; PI expiry check on payment/conversion; TI total = Σ line net + Σ line VAT.
+Built (`erp/src/server/sales/`): active customer; one line per stock bucket; SQM ≤ available (`reserveStock`, row-locked); discounts ≤ amounts; non-SR tax code needs `taxCode.change` + reason, RC refused (`orders.ts`, `vat.ts`); SO editable only while Open and with no live PI (TD-018); cancel needs `sales.cancel` + reason; PI needs an existing SO (`salesOrderId` NOT NULL), date ≥ SO date, SQM ≤ open (not invoiced, not on another open PI); expired PI blocked by `assertPiUsable`; renewal needs `sales.renewPi`. Still required: TI rules (T5-06).
 
 ## 6. Database entities
 
@@ -61,7 +61,7 @@ SO reserves (no movement); DN consumes (`DN` movement). See [Stock reservations]
 
 ## 9. Permissions
 
-None built (Sales Staff today only has `customers.view`, `customers.edit`, `products.view`, `inventory.view`). Planned per spec §5: SO/PI/TI (Owner/Manager Full, Accountant View, Sales Create/Edit, Storekeeper View); renew PI / extend SO (Owner, Manager); change tax code (Owner, Manager, Accountant); view cost/profit.
+Built (TD-019): `sales.view`, `sales.edit`, `sales.cancel`, `sales.renewPi`, `sales.extendReservation`, `taxCode.change`, per spec §5: SO/PI/TI (Owner/Manager Full, Accountant View, Sales Create/Edit, Storekeeper View); renew PI / extend SO (Owner, Manager); change tax code (Owner, Manager, Accountant); view cost/profit.
 
 ## 10. Audit requirements
 
@@ -74,8 +74,11 @@ Required: create, edit, cancel, reserve/release, PI expiry/renewal, tax code cha
 | Customer master | Done (Step 2) | `/masters/customers`, `saveCustomer` |
 | Reservation engine | Done (Step 3) | `stock.ts` |
 | Settings for price mode, PI validity, SO reservation days, credit sales | Done | `/settings/company` |
-| SO, PI, TI documents | Planned (Step 5) | — |
-| PI expiry job | Planned (Step 5) | no job framework yet |
+| Sales orders + reservation | Done | `sales/orders.ts`, `/sales/orders` |
+| Proforma invoices, renewal, close/cancel | Done | `sales/proformas.ts`, `/sales/proformas` |
+| VAT maths (C4 proposal) | Built, pending C4 | `sales/vat.ts` |
+| Tax invoice | Planned (T5-06, C4) | — |
+| PI expiry job | Function ready (`expireProformaInvoices`); scheduler Planned (TJ-01) | — |
 | Sales report, Profit per Invoice, Open/Expired PIs | Planned (Step 9) | — |
 | SO/PI/TI PDFs | Planned | — |
 
@@ -90,6 +93,6 @@ Everything in this module. Customer contacts (`customer_contacts`) and the CRM l
 
 ## 14. Relevant tests
 
-None yet — required (spec §12): PI/TI without SO rejected; reserve/edit/cancel figures; concurrent reservation; multi-line inclusive rounding with discounts reconciling to totals; expired PI usage and renewal.
+`erp/tests/sales.test.ts` (16): VAT spec example and 300 random documents; reserve on save; concurrent SOs; edit/cancel figures; permissions; tax code rule; PI only from SO, expiry, partial quoting, close/cancel, renewal audited, no GL. `erp/e2e/sales-flow.spec.ts`: the flow in the browser. Still required: TI tests (T5-06).
 
 Related: [Stock reservations](stock-reservations.md) · [VAT](vat.md) · [Payments](payments.md) · [Delivery notes](delivery-notes.md) · [CRM](crm.md) · [Approvals](approvals.md) · [Decisions](../../DECISIONS.md)
