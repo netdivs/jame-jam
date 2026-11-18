@@ -14,7 +14,7 @@ export default async function CustomerForm({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <PageHeader title={isNew ? "New customer" : c!.name} subtitle={c?.code} back={{ href: "/masters/customers", label: "Customers" }} actions={!isNew && user.ctx.permissions.has("accounts.view") && <LinkButton href={`/accounts/ledgers/customer/${id}`} variant="secondary">Ledger / statement</LinkButton>} />
+      <PageHeader title={isNew ? "New customer" : c!.name} subtitle={c?.code} back={{ href: "/masters/customers", label: "Customers" }} actions={!isNew && (<div className="flex flex-wrap gap-2">{user.ctx.permissions.has("crm.view") && <LinkButton href={`/crm/customers/${id}`} variant="secondary">Customer 360</LinkButton>}{user.ctx.permissions.has("accounts.view") && <LinkButton href={`/accounts/ledgers/customer/${id}`} variant="secondary">Ledger / statement</LinkButton>}</div>)} />
       <Card className="max-w-3xl">
         <ActionForm action={saveCustomerAction.bind(null, isNew ? null : id)} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

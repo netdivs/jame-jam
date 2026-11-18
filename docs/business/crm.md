@@ -2,7 +2,7 @@
 
 Purpose: leads, opportunities, interactions, follow-ups and a customer 360 timeline, integrated with the customer master and sales orders.
 
-**Implementation status:** Planned (Step 10). Customer master Done (Step 2).
+**Implementation status:** Done (T10-01, 18 Nov 2026, not deployed) — see TD-031 in DECISIONS.md for the rules as built. Services: `erp/src/server/crm/crm.ts`; pages under `/crm`.
 
 ## 1. Business purpose
 

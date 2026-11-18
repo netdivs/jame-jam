@@ -86,7 +86,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T10-01 | Leads → customer conversion; opportunities → SO; interactions; follow-ups + reminders; customer 360 | Med | T5-02, TJ-01 | PLANNED | O/K | R9 | H R P A |
+| T10-01 | Leads → customer conversion; opportunities → SO; interactions; follow-ups + reminders; customer 360 | Med | T5-02, TJ-01 | DONE (18 Nov 2026, TD-031; TIs/returns join the 360 timeline with T5-06/Step 7; no email/WhatsApp notifications — out of scope per spec) | O/K | R9 | H R P A |
 
 ## Step 11 — Opening setup, demo, readiness
 

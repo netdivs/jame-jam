@@ -117,16 +117,18 @@ export function DefList({ items }: { items: [string, ReactNode][] }) {
 const inputCls =
   "block w-full min-h-9 rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-fg placeholder:text-muted/70 focus:border-primary focus:outline-none focus:ring-2 focus:ring-ring/30 aria-[invalid=true]:border-danger";
 
-export function Field({ label, name, error, hint, required, children }: { label: string; name: string; error?: string; hint?: string; required?: boolean; children: ReactNode }) {
+/** `id` defaults to `name`; pass one when the same field name appears in two forms on a page. */
+export function Field({ label, name, id, error, hint, required, children }: { label: string; name: string; id?: string; error?: string; hint?: string; required?: boolean; children: ReactNode }) {
+  const fid = id ?? name;
   return (
     <div className="min-w-0">
-      <label htmlFor={name} className="mb-1 block text-xs font-medium text-fg">
+      <label htmlFor={fid} className="mb-1 block text-xs font-medium text-fg">
         {label}
         {required && <span className="text-danger"> *</span>}
       </label>
       {children}
       {error ? (
-        <p id={`${name}-error`} className="mt-1 text-xs text-danger">{error}</p>
+        <p id={`${fid}-error`} className="mt-1 text-xs text-danger">{error}</p>
       ) : hint ? (
         <p className="mt-1 text-xs text-muted">{hint}</p>
       ) : null}
@@ -135,19 +137,21 @@ export function Field({ label, name, error, hint, required, children }: { label:
 }
 
 type InputP = ComponentProps<"input"> & { label: string; name: string; error?: string; hint?: string };
-export function Input({ label, name, error, hint, required, className, ...p }: InputP) {
+export function Input({ label, name, id, error, hint, required, className, ...p }: InputP) {
+  const fid = id ?? name;
   return (
-    <Field label={label} name={name} error={error} hint={hint} required={required}>
-      <input id={name} name={name} required={required} aria-invalid={Boolean(error)} aria-describedby={error ? `${name}-error` : undefined} className={cx(inputCls, className)} {...p} />
+    <Field label={label} name={name} id={fid} error={error} hint={hint} required={required}>
+      <input id={fid} name={name} required={required} aria-invalid={Boolean(error)} aria-describedby={error ? `${fid}-error` : undefined} className={cx(inputCls, className)} {...p} />
     </Field>
   );
 }
 
 type SelectP = ComponentProps<"select"> & { label: string; name: string; error?: string; hint?: string; options: { value: string; label: string }[]; placeholder?: string };
-export function Select({ label, name, error, hint, required, options, placeholder, className, ...p }: SelectP) {
+export function Select({ label, name, id, error, hint, required, options, placeholder, className, ...p }: SelectP) {
+  const fid = id ?? name;
   return (
-    <Field label={label} name={name} error={error} hint={hint} required={required}>
-      <select id={name} name={name} required={required} aria-invalid={Boolean(error)} className={cx(inputCls, className)} {...p}>
+    <Field label={label} name={name} id={fid} error={error} hint={hint} required={required}>
+      <select id={fid} name={name} required={required} aria-invalid={Boolean(error)} className={cx(inputCls, className)} {...p}>
         {placeholder !== undefined && <option value="">{placeholder}</option>}
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -160,10 +164,11 @@ export function Select({ label, name, error, hint, required, options, placeholde
 }
 
 type TextareaP = ComponentProps<"textarea"> & { label: string; name: string; error?: string; hint?: string };
-export function Textarea({ label, name, error, hint, required, className, ...p }: TextareaP) {
+export function Textarea({ label, name, id, error, hint, required, className, ...p }: TextareaP) {
+  const fid = id ?? name;
   return (
-    <Field label={label} name={name} error={error} hint={hint} required={required}>
-      <textarea id={name} name={name} rows={3} required={required} aria-invalid={Boolean(error)} className={cx(inputCls, className)} {...p} />
+    <Field label={label} name={name} id={fid} error={error} hint={hint} required={required}>
+      <textarea id={fid} name={name} rows={3} required={required} aria-invalid={Boolean(error)} className={cx(inputCls, className)} {...p} />
     </Field>
   );
 }

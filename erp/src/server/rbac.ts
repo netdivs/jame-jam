@@ -57,6 +57,11 @@ export const PERMISSIONS = {
   "pettyCash.view": "View petty cash boxes, transactions and the daily cash report",
   "pettyCash.manage": "Record petty cash top-ups and expenses, cancel them, and manage boxes and expense categories",
   "bankRec.manage": "Enter and import bank statements, match them, post bank charges and save reconciliations",
+  // CRM (spec §3.6; "own" = records assigned to / owned by the user)
+  "crm.view": "View own CRM leads, opportunities, follow-ups and customer timelines",
+  "crm.viewAll": "View every user's CRM records and CRM reports",
+  "crm.edit": "Create and update own leads, opportunities, interactions and follow-ups",
+  "crm.editAll": "Edit or reassign any user's CRM records",
 } as const;
 
 export type PermissionKey = keyof typeof PERMISSIONS;
@@ -114,6 +119,8 @@ export const ROLES: { key: string; name: string; description: string; permission
       "pettyCash.view",
       "pettyCash.manage",
       "bankRec.manage",
+      "crm.view",
+      "crm.viewAll",
     ],
   },
   {
@@ -121,7 +128,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     name: "Sales Staff",
     description: "Customers, sales orders and invoices",
     // Spec §5: SO / PI / TI create/edit; no cancel, renew, extend or tax code change.
-    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "receipts.view", "receipts.create"],
+    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "receipts.view", "receipts.create", "crm.view", "crm.edit"],
   },
   {
     key: "storekeeper",

@@ -8,6 +8,7 @@ import { AppError, Ctx, assertCan, prisma, systemCtx, today } from "../core";
 import { expireProformaInvoices } from "../sales/proformas";
 import { inventoryReconciliation } from "../inventory/queries";
 import { chequesDue, pdcReconciliation } from "../receipts/cheques";
+import { followUpsDue } from "../crm/crm";
 
 type JobResult = { status: "OK" | "WARNING"; result: Record<string, unknown> };
 
@@ -47,7 +48,21 @@ export const JOBS: Record<string, { title: string; run: (asOf: Date, ctx: Ctx) =
       };
     },
   },
-  // SO reservation expiry joins here once client decision C2 is answered (T5-03); PDC and CRM reminders later.
+  "crm-followups": {
+    title: "Count CRM follow-ups due today and overdue per user (dashboard reminder)",
+    run: async (asOf) => {
+      const due = await followUpsDue(asOf);
+      const now = new Date();
+      const byUser: Record<string, { dueToday: number; overdue: number }> = {};
+      for (const f of due) {
+        const r = (byUser[f.assignedTo.name] ??= { dueToday: 0, overdue: 0 });
+        if (f.dueAt < now) r.overdue++;
+        else r.dueToday++;
+      }
+      return { status: "OK", result: { open: due.length, byUser } };
+    },
+  },
+  // SO reservation expiry joins here once client decision C2 is answered (T5-03).
 };
 
 export type JobOutcome = { job: string; status: "OK" | "WARNING" | "FAILED" | "SKIPPED"; result?: unknown; error?: string };

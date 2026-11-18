@@ -103,6 +103,7 @@ export function SoForm({
   taxes,
   defaultTaxId,
   canChangeTax,
+  opportunity,
 }: {
   id: string | null;
   initial: SoFormValue;
@@ -113,6 +114,8 @@ export function SoForm({
   taxes: TaxOpt[];
   defaultTaxId: string;
   canChangeTax: boolean;
+  /** New SO from a CRM opportunity: the customer is fixed and the opportunity is won on save. */
+  opportunity?: { id: string; number: string; title: string };
 }) {
   const [head, setHead] = useState({ customerId: initial.customerId, date: initial.date, priceMode: initial.priceMode, discount: initial.discount, notes: initial.notes });
   const blank = (): Line => ({ key: seq++, productId: "", balanceId: "", description: "", sqm: "", unitPrice: "", discount: "", taxCodeId: defaultTaxId, taxReason: "" });
@@ -138,6 +141,7 @@ export function SoForm({
   const inclusive = head.priceMode === "INCLUSIVE";
   const payload = JSON.stringify({
     ...head,
+    opportunityId: opportunity?.id,
     lines: lines.map(({ key: _k, productId: _p, ...l }) => ({ ...l, taxReason: l.taxReason || undefined })),
   });
   const usedBalances = new Set(lines.map((l) => l.balanceId).filter(Boolean));
@@ -145,11 +149,16 @@ export function SoForm({
   return (
     <ActionForm action={saveSoAction.bind(null, id)} className="space-y-5">
       <input type="hidden" name="payload" value={payload} />
+      {opportunity && (
+        <p className="rounded-md border border-info/30 bg-info-bg px-3 py-2 text-sm">
+          From opportunity <span className="font-medium">{opportunity.number}</span> — {opportunity.title}. Saving the order marks the opportunity as won.
+        </p>
+      )}
       <section className="rounded-lg border border-border bg-surface p-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
           <div className="sm:col-span-2">
             <L htmlFor="customerId">Customer *</L>
-            <select id="customerId" className={inputClass} value={head.customerId} onChange={(e) => setHead({ ...head, customerId: e.target.value })}>
+            <select id="customerId" className={inputClass} value={head.customerId} disabled={Boolean(opportunity)} onChange={(e) => setHead({ ...head, customerId: e.target.value })}>
               <option value="">Select customer…</option>
               {customers.map((c) => (
                 <option key={c.value} value={c.value}>

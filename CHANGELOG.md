@@ -20,6 +20,15 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — CRM (T10-01; not deployed)
+- Leads (sources, requirement, assignee, statuses, lost reason) with conversion to a new or existing customer and an optional opportunity.
+- Opportunities with pipeline stages and values; "Create sales order (won)" opens a pre-filled SO, and saving it marks the opportunity won.
+- Interactions (call, meeting, site visit, email, note) and follow-ups (due time, assignee, done with outcome and next follow-up, cancel); follow-ups due on the dashboard and at `/crm`; daily `crm-followups` job.
+- Customer 360: profile, extra contact persons, open opportunities, activity, and a timeline of leads, opportunities, SOs, PIs, receipts, refunds and cheques; CRM reports (leads by status/source, pipeline, won/lost, overdue follow-ups, activity by user).
+- Sales staff see and edit only their own CRM records. Permissions `crm.view`, `crm.viewAll`, `crm.edit`, `crm.editAll`. Migrations `crm`, `crm_lead_conversion` (additive). TD-031.
+- Form fields can take their own id, so two forms on one page no longer share a label target.
+- Tests: 3 CRM tests (101 in total); Playwright CRM flow (18 in total).
+
 ### Added — customer and supplier ledgers (T8-01; not deployed)
 - `/accounts/ledgers`: customers or suppliers with receivable/payable, advance and balance, and the spec §11.3 check (Σ parties = AR, AP and both advance accounts).
 - Statement per party for a date range: opening, every entry with a link to its document and running balance, closing split into owed and advance; money held on proformas / unpaid supplier invoices; goods received not invoiced. "Ledger / statement" button on customer and supplier pages; printing hides the menu.

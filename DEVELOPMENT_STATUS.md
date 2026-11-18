@@ -20,7 +20,7 @@
 | 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
 | 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. refund vouchers and supplier advance transfers (T8-06, T4-15), petty cash and the Daily Cash report (T8-04), bank reconciliation (T8-05), customer and supplier ledgers and statements (T8-01). Step 8 development is complete except PDF/Excel export of statements (TX-01/02) |
 | 9 | VAT & reports (R7) | ⏳ Not started |
-| 10 | CRM (R9) | ⏳ Not started |
+| 10 | CRM (R9) | ✅ Development complete (18 Nov 2026), not deployed: leads, opportunities → SO, interactions, follow-ups and reminders, customer 360, reports (TD-031) |
 | 11 | Opening setup (R8), mobile dashboard, demo data, client demo | 🟡 Partly done (opening stock entry, demo stock) |
 
 **Automated tests:** 46, all passing on the local test database (re-verified 17 Nov 2026):
@@ -343,6 +343,12 @@ Done without waiting for client decisions, in this order: T8-03 → T8-02 → T8
 `/accounts/ledgers` (customers / suppliers, balances, Σ parties = control accounts check) and `/accounts/ledgers/{customer|supplier}/[id]` statements with date range, document links, running balance, closing owed/advance split, open proformas or unpaid supplier invoices, GRNI note, browser print. Rules: TD-030. Tax invoices and credit notes will appear automatically once they post (T5-06, Step 7).
 
 **Verification:** Vitest 98/98 (the control check passes over the whole test database); Playwright 16/16 twice (desktop and Pixel 7); typecheck, lint, build.
+
+## 6i. CRM ✅ (T10-01 — 18 Nov 2026)
+
+`/crm` (follow-ups due), `/crm/leads`, `/crm/opportunities`, `/crm/customers/[id]` (customer 360), `/crm/reports`; dashboard "Your follow-ups due"; SO form accepts `?opportunity=`. Rules: TD-031. Own-records access for Sales is enforced in the services (lists, detail pages, edits). Not yet: tax invoices and returns on the 360 timeline (they do not exist yet).
+
+**Verification:** Vitest 101/101 (3 CRM tests: lead → customer, opportunity → SO won in the same transaction with rollback on a wrong customer, follow-ups, ownership, timeline, scoped report); Playwright 18/18 twice (desktop and Pixel 7); typecheck, lint, build, no drift. The E2E found two forms on one page sharing a field id ("notes"), which pointed a label at the wrong field; fields can now take their own id.
 
 ## 7. Deployment
 

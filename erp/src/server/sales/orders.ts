@@ -7,6 +7,7 @@
 // or reserve the same SQM twice.
 import type { PriceMode, Prisma, SoStatus } from "@prisma/client";
 import { z } from "zod";
+import { markOpportunityWon, winOpportunity } from "../crm/crm";
 import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, can, inTx, nextDocNumber, round4, toDateOnly } from "../core";
 import { lockBalance, releaseReservation, reserveStock } from "../inventory/stock";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
@@ -58,6 +59,8 @@ export const soSchema = z.object({
   priceMode: z.enum(["INCLUSIVE", "EXCLUSIVE"]).optional(),
   discount: z.union([decimal({ min: 0, dp: 2, label: "Invoice discount" }), z.literal("").transform(() => undefined)]).optional(),
   notes: optText(2000),
+  /** New SO from a CRM opportunity: the opportunity becomes Won (spec §3.6). */
+  opportunityId: optText(40),
   lines: z.array(lineSchema).min(1, "Add at least one line"),
 });
 export type SoInput = z.input<typeof soSchema>;
@@ -149,6 +152,11 @@ export async function saveSalesOrder(ctx: Ctx, id: string | null, raw: unknown) 
     const mode: PriceMode = input.priceMode ?? settings.defaultPriceMode;
 
     const before = id ? await lockSo(tx, id) : null;
+    if (before && input.opportunityId && input.opportunityId !== before.opportunityId) {
+      throw new AppError("VALIDATION", "An existing sales order cannot be linked to an opportunity");
+    }
+    // Opportunity → stock buckets (lock order).
+    const opportunity = !before && input.opportunityId ? await winOpportunity(tx, ctx, input.opportunityId, customer.id) : null;
     if (before) {
       if (!SO_EDITABLE.includes(before.status)) {
         throw new AppError("VALIDATION", `SO ${before.number} is ${soStatusLabel(before.status)} and can no longer be edited`);
@@ -183,7 +191,8 @@ export async function saveSalesOrder(ctx: Ctx, id: string | null, raw: unknown) 
 
     if (!before) {
       const number = await nextDocNumber(tx, "SO", date);
-      const so = await tx.salesOrder.create({ data: { ...header, number, createdById: ctx.userId } });
+      const so = await tx.salesOrder.create({ data: { ...header, number, opportunityId: opportunity?.id ?? null, createdById: ctx.userId } });
+      if (opportunity) await markOpportunityWon(tx, ctx, opportunity, number);
       for (const it of items) {
         const line = await tx.salesOrderItem.create({ data: { ...it, salesOrderId: so.id } });
         const r = await reserveStock(tx, ctx, { balanceId: it.balanceId, sqm: it.sqm, refType: "SALES_ORDER", refId: so.id, refLineId: line.id });

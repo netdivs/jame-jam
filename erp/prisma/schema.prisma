@@ -29,6 +29,10 @@ model User {
   overrides      UserPermission[]
   auditLogs      AuditLog[]
   pettyCashBoxes PettyCashAccount[]
+  leads          Lead[]             @relation("LeadAssignee")
+  opportunities  Opportunity[]      @relation("OpportunityOwner")
+  interactions   CrmInteraction[]   @relation("InteractionUser")
+  followUps      CrmFollowUp[]      @relation("FollowUpAssignee")
 }
 
 model Role {
@@ -318,6 +322,14 @@ model Customer {
   receipts         CustomerReceipt[]
   cheques          Cheque[]
   refunds          Refund[]
+  /// The lead this customer was converted from (CRM).
+  leadId           String?           @unique
+  lead             Lead?             @relation("LeadCustomer", fields: [leadId], references: [id])
+  contacts         CustomerContact[]
+  convertedLeads   Lead[]            @relation("LeadConvertedTo")
+  opportunities    Opportunity[]
+  interactions     CrmInteraction[]
+  followUps        CrmFollowUp[]
 }
 
 enum SupplierType {
@@ -375,6 +387,7 @@ model Product {
   poItems          PurchaseOrderItem[]
   soItems          SalesOrderItem[]
   piItems          ProformaInvoiceItem[]
+  leads            Lead[]
 }
 
 model LandedCostCategory {
@@ -969,6 +982,9 @@ model SalesOrder {
   updatedAt            DateTime          @updatedAt
   items                SalesOrderItem[]
   proformas            ProformaInvoice[]
+  /// The CRM opportunity this order won (spec §3.6).
+  opportunityId        String?           @unique
+  opportunity          Opportunity?      @relation(fields: [opportunityId], references: [id])
 
   @@index([customerId])
   @@index([status])
@@ -1418,4 +1434,164 @@ model BankReconciliation {
   createdAt        DateTime    @default(now())
 
   @@unique([bankAccountId, statementDate])
+}
+
+// ───────────────────────────── CRM (T10-01) ─────────────────────────────
+
+/// Extra contact persons of a customer (spec §3.6 "multiple contact persons"); the main one stays on Customer.
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name       String
+  role       String?
+  mobile     String?
+  email      String?
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+model Lead {
+  id                  String           @id @default(cuid())
+  number              String           @unique
+  name                String
+  company             String?
+  contactPerson       String?
+  mobile              String?
+  email               String?
+  source              String
+  requirement         String?
+  productId           String?
+  product             Product?         @relation(fields: [productId], references: [id])
+  expectedSqm         Decimal?         @db.Decimal(18, 4)
+  project             String?
+  assignedToId        String
+  assignedTo          User             @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  status              LeadStatus       @default(NEW)
+  lostReason          String?
+  convertedAt         DateTime?
+  /// The customer this lead became, or the existing customer it was converted to (many leads → one customer).
+  convertedCustomerId String?
+  convertedCustomer   Customer?        @relation("LeadConvertedTo", fields: [convertedCustomerId], references: [id])
+  /// Set when converting created a new customer (Customer.leadId points back).
+  customer            Customer?        @relation("LeadCustomer")
+  createdById         String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  opportunities       Opportunity[]
+  interactions        CrmInteraction[]
+  followUps           CrmFollowUp[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([convertedCustomerId])
+}
+
+enum OpportunityStage {
+  INQUIRY
+  QUOTATION
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model Opportunity {
+  id                String           @id @default(cuid())
+  number            String           @unique
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  leadId            String?
+  lead              Lead?            @relation(fields: [leadId], references: [id])
+  title             String
+  project           String?
+  expectedSqm       Decimal?         @db.Decimal(18, 4)
+  expectedValue     Decimal          @default(0) @db.Decimal(18, 2)
+  stage             OpportunityStage @default(INQUIRY)
+  expectedCloseDate DateTime?        @db.Date
+  ownerId           String
+  owner             User             @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  lostReason        String?
+  closedAt          DateTime?
+  salesOrder        SalesOrder?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  interactions      CrmInteraction[]
+  followUps         CrmFollowUp[]
+
+  @@index([stage])
+  @@index([ownerId])
+  @@index([customerId])
+}
+
+enum InteractionType {
+  CALL
+  MEETING
+  SITE_VISIT
+  EMAIL
+  NOTE
+}
+
+/// Communication history (spec §3.6): on a customer, a lead or an opportunity.
+model CrmInteraction {
+  id            String          @id @default(cuid())
+  type          InteractionType
+  at            DateTime
+  customerId    String?
+  customer      Customer?       @relation(fields: [customerId], references: [id])
+  leadId        String?
+  lead          Lead?           @relation(fields: [leadId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity?    @relation(fields: [opportunityId], references: [id])
+  userId        String
+  user          User            @relation("InteractionUser", fields: [userId], references: [id])
+  notes         String
+  outcome       String?
+  createdAt     DateTime        @default(now())
+
+  @@index([customerId])
+  @@index([leadId])
+  @@index([opportunityId])
+  @@index([userId, at])
+}
+
+enum FollowUpStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// A reminder to follow up (spec §3.6). "Overdue" = OPEN and past dueAt (computed, not stored).
+model CrmFollowUp {
+  id            String         @id @default(cuid())
+  dueAt         DateTime
+  assignedToId  String
+  assignedTo    User           @relation("FollowUpAssignee", fields: [assignedToId], references: [id])
+  customerId    String?
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  leadId        String?
+  lead          Lead?          @relation(fields: [leadId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity?   @relation(fields: [opportunityId], references: [id])
+  notes         String
+  status        FollowUpStatus @default(OPEN)
+  outcome       String?
+  doneAt        DateTime?
+  doneById      String?
+  createdById   String?
+  createdAt     DateTime       @default(now())
+
+  @@index([assignedToId, status, dueAt])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([opportunityId])
 }

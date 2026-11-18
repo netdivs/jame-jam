@@ -43,6 +43,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ],
     },
     {
+      label: "CRM",
+      items: has("crm.view")
+        ? [
+            { href: "/crm", label: "Follow-ups", icon: "followUps" as const },
+            { href: "/crm/leads", label: "Leads", icon: "leads" as const },
+            { href: "/crm/opportunities", label: "Opportunities", icon: "opportunities" as const },
+            { href: "/crm/reports", label: "CRM reports", icon: "reports" as const },
+          ]
+        : [],
+    },
+    {
       label: "Purchase",
       items: [
         ...(has("purchase.view")

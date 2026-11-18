@@ -41,6 +41,9 @@ import {
   PiggyBank,
   ListChecks,
   NotebookTabs,
+  BellRing,
+  UserPlus,
+  Target,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -81,6 +84,9 @@ const ICONS = {
   pettyCash: PiggyBank,
   bankRec: ListChecks,
   ledgers: NotebookTabs,
+  followUps: BellRing,
+  leads: UserPlus,
+  opportunities: Target,
 };
 
 function ThemeToggle() {

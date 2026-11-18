@@ -3,8 +3,9 @@ import { Card, LinkButton, PageHeader, Stat, Table } from "@/components/ui";
 import { requireUser } from "@/server/auth";
 import { D, prisma, sum, today } from "@/server/core";
 import { chequesDue } from "@/server/receipts/cheques";
+import { followUpsDue } from "@/server/crm/crm";
 import { inventoryReconciliation, listMovements, stockByProduct } from "@/server/inventory/queries";
-import { fmtAED, fmtDate, fmtSqm, titleCase } from "@/lib/format";
+import { fmtAED, fmtDate, fmtDateTime, fmtSqm, titleCase } from "@/lib/format";
 
 export const metadata = { title: "Dashboard" };
 
@@ -16,6 +17,7 @@ export default async function Dashboard() {
     return (
       <>
         <PageHeader title={`Welcome, ${user.name}`} subtitle={user.roleName} />
+        {can("crm.view") && <FollowUpsDue userId={user.ctx.userId!} />}
         <Card>
           <p className="text-sm text-muted">Use the menu to open the modules you have access to.</p>
         </Card>
@@ -43,6 +45,7 @@ export default async function Dashboard() {
         subtitle={`${user.roleName} · ${fmtDate(new Date())}`}
         actions={can("inventory.openingStock") && <LinkButton href="/inventory/lots/new">Enter opening stock</LinkButton>}
       />
+      {can("crm.view") && <FollowUpsDue userId={user.ctx.userId!} />}
       {can("receipts.view") && <PdcDue issued={can("purchase.view")} />}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Available stock" value={`${fmtSqm(onHand.minus(reserved))} SQM`} hint={`${fmtSqm(onHand)} physical · ${fmtSqm(reserved)} reserved`} />
@@ -131,3 +134,29 @@ async function PdcDue({ issued }: { issued: boolean }) {
   );
 }
 
+
+/** The user's CRM follow-ups due today or overdue (spec §3.6 reminders, §6 "follow-ups due"). */
+async function FollowUpsDue({ userId }: { userId: string }) {
+  const due = await followUpsDue(today(), userId);
+  if (due.length === 0) return null;
+  const now = new Date();
+  return (
+    <Card title={`Your follow-ups due (${due.length})`} actions={<Link href="/crm" className="text-xs text-primary">All follow-ups</Link>} className="mb-5" pad={false}>
+      <Table>
+        <tbody>
+          {due.slice(0, 6).map((f) => {
+            const href = f.opportunity ? `/crm/opportunities/${f.opportunity.id}` : f.lead ? `/crm/leads/${f.lead.id}` : `/crm/customers/${f.customer?.id}`;
+            const about = f.opportunity ? f.opportunity.title : f.lead ? f.lead.name : f.customer?.name;
+            return (
+              <tr key={f.id}>
+                <td className={`whitespace-nowrap ${f.dueAt < now ? "font-medium text-danger" : ""}`}>{fmtDateTime(f.dueAt)}</td>
+                <td><Link href={href} className="font-medium text-primary hover:underline">{about}</Link></td>
+                <td className="hidden sm:table-cell">{f.notes}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
