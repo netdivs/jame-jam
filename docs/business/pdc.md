@@ -2,7 +2,7 @@
 
 Purpose: full management of received and issued post-dated cheques, with status history, GL postings, due reminders and PDC reports.
 
-**Implementation status:** Built (18 Nov 2026, T6-02/T6-04; branch `feat/step5-sales`). See TD-026 for the accounting. Not yet: issued cheques against landed cost bills, PDC receipt PDF, allocation to tax invoices (waits for C4).
+**Implementation status:** Built (18 Nov 2026, T6-02/T6-04; branch `feat/step5-sales`). See TD-026 for the accounting. Issued cheques can also pay landed cost bills and opening supplier invoices (TD-034, TD-033). Not yet: PDC receipt PDF, allocation to tax invoices (waits for C4).
 
 ## 1. Business purpose
 
