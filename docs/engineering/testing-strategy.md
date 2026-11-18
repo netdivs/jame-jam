@@ -96,4 +96,4 @@ Paste the actual output in the worker report ([code-review.md](code-review.md#de
   - a manual override;
   - dashboard reconciliation.
 - **WSL without root:** Chromium needs `libnss3`, `libnspr4` and `libasound2`. Install them with `sudo npx playwright install-deps chromium`. Without sudo, `apt-get download` the packages, extract them with `dpkg-deb -x` into `~/.cache/ms-playwright/local-deps/root`, and export `LD_LIBRARY_PATH=$HOME/.cache/ms-playwright/local-deps/root/usr/lib/x86_64-linux-gnu`.
-- **Not yet:** running in CI (TQ-01).
+- **CI (TQ-01):** `.github/workflows/ci.yml` runs typecheck, lint, Vitest (disposable PostgreSQL 16 service), migration drift, build, `npm audit` (report only until TS-05) and then the Playwright flows on every push and pull request. It has not run yet: the branch is not pushed.

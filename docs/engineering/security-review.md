@@ -38,7 +38,7 @@ Legend: ✅ in place · ⚠️ partial · ❌ gap · n/a not applicable yet.
 | | Security headers (CSP, HSTS, X-Frame-Options, Referrer-Policy) | ✅ | `next.config.ts` (TS-02); CSP keeps `script-src 'unsafe-inline'` for Next.js hydration (no nonce); `X-Powered-By` removed |
 | | Container runs as non-root | ✅ (built-image check pending) | two-stage `erp/Dockerfile`, runtime `USER node`. A local image build could not finish (Docker Desktop network resets during `npm ci`); verify `id` = node at the release build |
 | | Dev dependencies in runtime image | ⚠️ | `npm ci` installs devDependencies into the final single-stage image |
-| | Dependency audit | ❌ | no `npm audit` in process / CI |
+| | Dependency audit | ⚠️ | `npm audit --omit=dev` in CI (report only). 18 Nov 2026: 5 high — zod < 4.6.6, postcss ≤ 8.5.22 (inside Next.js, build time), deepmerge-ts < 8 (inside Prisma CLI). Upgrades: TS-05 |
 | | Demo users and demo stock removed | ❌ | live DB has demo data ([production-readiness.md](production-readiness.md)) |
 
 ## 2. Recommendations (not implemented)

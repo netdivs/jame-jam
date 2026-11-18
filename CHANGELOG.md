@@ -20,6 +20,9 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — CI workflow (TQ-01)
+- `.github/workflows/ci.yml`: typecheck, lint, Vitest against a PostgreSQL 16 service, migration drift, build, dependency audit (report only for now: 5 high findings in zod, postcss via Next.js and deepmerge-ts via Prisma — upgrades tracked as TS-05), then Playwright desktop + mobile with the report uploaded on failure. Not run yet (branch not pushed).
+
 ### Security — hardening (TS-02; not deployed)
 - Sign-in lock after repeated failures (per email and per IP), failed sign-ins and sign-outs audited, client IP on every audit row.
 - Security headers (CSP, X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy, HSTS); `X-Powered-By` removed.

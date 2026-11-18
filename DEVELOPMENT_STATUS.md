@@ -28,7 +28,7 @@
 - Inventory: 15
 - Purchase: 21
 
-**Quality gates (17 Nov 2026):** typecheck ✅ · lint ✅ (0 problems) · tests ✅ 46/46 · `next build` ✅ · migration drift ✅ none · HTTP walkthrough ✅ 78/78 · Playwright E2E ✅ 2/2 (desktop and mobile). There is no CI yet.
+**Quality gates (18 Nov 2026, local):** typecheck ✅ · lint ✅ · tests ✅ 104/104 · `next build` ✅ · migration drift ✅ none · Playwright E2E ✅ 22/22 (desktop and mobile). CI workflow written (`.github/workflows/ci.yml`, TQ-01) but not run yet — the branch has not been pushed.
 
 The verified audit behind this file is [docs/audit/2026-11-17-repository-audit.md](docs/audit/2026-11-17-repository-audit.md). Tasks: [TASKS.md](TASKS.md). Decisions: [DECISIONS.md](DECISIONS.md).
 
