@@ -20,6 +20,9 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — production base seed (TS-04)
+- `npm run db:seed:base`: base data only (no demo users or stock), no password printed, password (≥ 12 chars) needed only to create the first owner; on an existing install no user is created or changed. Role permissions are reset in one transaction per role. Tests: 3 (107 in total).
+
 ### Added — CI workflow (TQ-01)
 - `.github/workflows/ci.yml`: typecheck, lint, Vitest against a PostgreSQL 16 service, migration drift, build, dependency audit (report only for now: 5 high findings in zod, postcss via Next.js and deepmerge-ts via Prisma — upgrades tracked as TS-05), then Playwright desktop + mobile with the report uploaded on failure. Not run yet (branch not pushed).
 

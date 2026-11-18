@@ -63,15 +63,17 @@ Run only when permissions, roles, chart of accounts, tax codes or landed cost ca
 - upserts accounts (name/type/parent/group/`systemKey`), tax codes, landed cost categories (create only), the settings row (create only), warehouse `ALSAJJA` (create only), and users (create only — existing passwords untouched);
 - **never deletes business data**.
 
-Caveat: the only entry point is `npx prisma db seed` → `erp/prisma/seed.ts`, which calls `seedBase` **with `demoUsers: true`** and then `seedDemoInventory` (skipped only when any lot exists). It also prints the seed password, and uses a built-in default password when `SEED_PASSWORD` is unset. Consequences in production:
-- missing demo users (`manager@`, `accountant@`, … `@jamejam.local`) are re-created;
-- if the database has **no lots** (e.g. after demo data is removed and before real stock), demo stock and its journals are created.
-
-Until a base-only entry point exists (Recommendation), run it only with the user's approval, with `SEED_PASSWORD` set to a strong value, and never on a database without lots:
+**Use the base-only entry point in production (TS-04):** `npm run db:seed:base` (`erp/prisma/seed-base.ts` → `seedBaseOnly`). It runs `seedBase` without demo users and without demo stock, resets each role's permissions in one transaction per role (F20), never prints a password, and:
+- on an existing install (an owner user exists) creates or changes **no users** and needs no `SEED_PASSWORD`;
+- on a first install creates `owner@jamejam.local` and requires `SEED_PASSWORD` of at least 12 characters (change the email and password after the first sign-in).
 
 ```bash
-$DC exec -e SEED_PASSWORD='<strong value, not logged>' app npx prisma db seed
+$DC exec app npm run db:seed:base
+# first install only:
+$DC exec -e SEED_PASSWORD='<strong value, not logged>' app npm run db:seed:base
 ```
+
+`npx prisma db seed` (`erp/prisma/seed.ts`) is the **demo/development** seed: it creates the five demo users and, on a database without lots, demo stock, and prints the password. Never run it in production.
 
 ## 5. Smoke test
 

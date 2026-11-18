@@ -8,7 +8,7 @@ type Acc = (typeof CHART_OF_ACCOUNTS)[number];
 
 export async function seedBase(
   db: PrismaClient,
-  opts: { demoUsers: boolean; password: string },
+  opts: { demoUsers: boolean; password: string; /** false: create no users at all (base seed on an existing install). */ createUsers?: boolean },
 ): Promise<void> {
   // Permissions & roles (role permissions are reset to the default matrix)
   for (const [key, description] of Object.entries(PERMISSIONS)) {
@@ -24,10 +24,11 @@ export async function seedBase(
       update: { name: r.name, description: r.description, system: true },
       create: { key: r.key, name: r.name, description: r.description, system: true },
     });
-    await db.rolePermission.deleteMany({ where: { roleId: role.id } });
-    await db.rolePermission.createMany({
-      data: r.permissions.map((permissionKey) => ({ roleId: role.id, permissionKey })),
-    });
+    // One transaction per role, so a failure never leaves a role without permissions (audit F20).
+    await db.$transaction([
+      db.rolePermission.deleteMany({ where: { roleId: role.id } }),
+      db.rolePermission.createMany({ data: r.permissions.map((permissionKey) => ({ roleId: role.id, permissionKey })) }),
+    ]);
   }
 
   // Chart of accounts
@@ -98,6 +99,7 @@ export async function seedBase(
   });
 
   // Users: one owner always; one per role for the demo
+  if (opts.createUsers === false) return;
   const hash = await bcrypt.hash(opts.password, 10);
   const users = opts.demoUsers
     ? [
@@ -116,4 +118,20 @@ export async function seedBase(
       create: { email: u.email, name: u.name, roleId: role.id, passwordHash: hash },
     });
   }
+}
+
+/**
+ * Production-safe seed (TS-04, audit F19): base data only — no demo users, no demo stock, never prints secrets.
+ * The password is needed only when the owner user does not exist yet (first install) and must be ≥ 12 characters.
+ * Returns what it did, for the caller to log.
+ */
+export async function seedBaseOnly(db: PrismaClient, password: string | undefined): Promise<{ ownerCreated: boolean; roles: number; permissions: number }> {
+  const ownerExists = (await db.user.count({ where: { role: { key: "owner" } } })) > 0;
+  if (!ownerExists && (!password || password.length < 12)) {
+    throw new Error("No owner user exists yet: set SEED_PASSWORD (at least 12 characters) for the first owner account.");
+  }
+  // With an owner already there, no user is created or touched (an owner who changed their email must not get a
+  // second "owner@jamejam.local" account).
+  await seedBase(db, { demoUsers: false, password: password ?? "", createUsers: !ownerExists });
+  return { ownerCreated: !ownerExists, roles: ROLES.length, permissions: Object.keys(PERMISSIONS).length };
 }
