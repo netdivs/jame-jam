@@ -1,5 +1,5 @@
 // Sales UI helpers (server-safe).
-import type { PiStatus as PiStatusT } from "@prisma/client";
+import type { PiStatus as PiStatusT, Prisma } from "@prisma/client";
 import { Badge, type Tone } from "@/components/ui";
 import { prisma } from "@/server/core";
 import { titleCase } from "@/lib/format";
@@ -19,7 +19,7 @@ const PI_TONE: Record<string, Tone> = { ACTIVE: "info", EXPIRED: "danger", CONVE
 export const SoStatus = ({ s }: { s: string }) => <Badge tone={SO_TONE[s]}>{s === "OPEN" ? "Open (reserved)" : titleCase(s)}</Badge>;
 
 /** PI status as the user should see it: an active PI past its expiry date shows as Expired. */
-export const PiStatus = ({ pi }: { pi: { status: PiStatusT; expiryDate: Date } }) => {
+export const PiStatus = ({ pi }: { pi: { status: PiStatusT; expiryDate: Date; receivedAmount?: Prisma.Decimal } }) => {
   const s = effectivePiStatus(pi);
   return <Badge tone={PI_TONE[s]}>{titleCase(s)}</Badge>;
 };

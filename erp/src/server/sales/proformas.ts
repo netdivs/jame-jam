@@ -5,7 +5,7 @@
 //    also treated as expired wherever it is used (assertPiUsable).
 //  - An expired PI cannot be paid or converted until renewed by a user with sales.renewPi; renewals are audited.
 //  - A PI posts no accounting or VAT entries.
-import type { PiStatus } from "@prisma/client";
+import type { PiStatus, Prisma } from "@prisma/client";
 import { z } from "zod";
 import { AppError, Ctx, D, Tx, ZERO, assertCan, audit, inTx, nextDocNumber, round2, round4, sum, systemCtx, toDateOnly, today } from "../core";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
@@ -17,13 +17,17 @@ export const PI_OPEN: PiStatus[] = ["ACTIVE", "EXPIRED"];
 
 export const addDays = (d: Date, days: number) => new Date(d.getTime() + days * 86_400_000);
 
-/** ACTIVE but past its expiry date counts as expired, even before the daily job has run. */
-export function effectivePiStatus(pi: { status: PiStatus; expiryDate: Date }, asOf: Date = today()): PiStatus {
-  return pi.status === "ACTIVE" && pi.expiryDate < asOf ? "EXPIRED" : pi.status;
+/**
+ * ACTIVE but past its expiry date counts as expired, even before the daily job has run.
+ * Only unpaid PIs expire (spec §3.3.3): once money is received against a PI it stays usable.
+ */
+export function effectivePiStatus(pi: { status: PiStatus; expiryDate: Date; receivedAmount?: Prisma.Decimal | null }, asOf: Date = today()): PiStatus {
+  const paid = pi.receivedAmount ? D(pi.receivedAmount).gt(0) : false;
+  return pi.status === "ACTIVE" && !paid && pi.expiryDate < asOf ? "EXPIRED" : pi.status;
 }
 
 /** Gate for paying against or converting a PI (Step 6 receipts, T5-06 tax invoices). */
-export function assertPiUsable(pi: { number: string; status: PiStatus; expiryDate: Date }, what: string, asOf: Date = today()) {
+export function assertPiUsable(pi: { number: string; status: PiStatus; expiryDate: Date; receivedAmount?: Prisma.Decimal | null }, what: string, asOf: Date = today()) {
   const s = effectivePiStatus(pi, asOf);
   if (s === "EXPIRED") throw new AppError("VALIDATION", `${what} is blocked: proforma ${pi.number} expired on ${pi.expiryDate.toISOString().slice(0, 10)}. Renew it first.`);
   if (s !== "ACTIVE") throw new AppError("VALIDATION", `${what} is blocked: proforma ${pi.number} is ${s.toLowerCase()}`);
@@ -155,15 +159,12 @@ export async function createProformaInvoice(ctx: Ctx, raw: unknown) {
 
 // ───────────────────────────── Expiry and renewal ─────────────────────────────
 
-/**
- * Mark ACTIVE proformas past their expiry date as EXPIRED. Idempotent; meant for the daily job (TJ-01).
- * Step 6 must exclude PIs that have received an advance once receipts exist (spec: "unpaid PIs").
- */
+/** Mark unpaid ACTIVE proformas past their expiry date as EXPIRED. Idempotent; run by the daily job (TJ-01). */
 export async function expireProformaInvoices(asOf: Date = today(), ctx: Ctx = systemCtx): Promise<number> {
   return inTx(async (tx) => {
     const due = await tx.$queryRaw<{ id: string; number: string; expiryDate: Date }[]>`
       SELECT "id", "number", "expiryDate" FROM "ProformaInvoice"
-      WHERE "status" = 'ACTIVE' AND "expiryDate" < ${asOf}
+      WHERE "status" = 'ACTIVE' AND "expiryDate" < ${asOf} AND "receivedAmount" = 0
       ORDER BY "id" FOR UPDATE SKIP LOCKED`;
     for (const pi of due) {
       await tx.proformaInvoice.update({ where: { id: pi.id }, data: { status: "EXPIRED" } });

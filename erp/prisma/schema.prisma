@@ -193,6 +193,7 @@ model BankAccount {
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   supplierPay SupplierPayment[]
+  receipts    CustomerReceipt[]
 }
 
 model FiscalYear {
@@ -304,6 +305,7 @@ model Customer {
   updatedAt        DateTime          @updatedAt
   salesOrders      SalesOrder[]
   proformas        ProformaInvoice[]
+  receipts         CustomerReceipt[]
 }
 
 enum SupplierType {
@@ -1019,11 +1021,14 @@ model ProformaInvoice {
   renewedById     String?
   renewedAt       DateTime?
   renewCount      Int                   @default(0)
+  /// Customer receipts recorded against this PI (advances). A PI with money received does not auto-expire.
+  receivedAmount  Decimal               @default(0) @db.Decimal(18, 2)
   closeReason     String?
   createdById     String?
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
   items           ProformaInvoiceItem[]
+  receipts        CustomerReceipt[]
 
   @@index([salesOrderId])
   @@index([status, expiryDate])
@@ -1050,4 +1055,41 @@ model ProformaInvoiceItem {
   grossAmount       Decimal         @db.Decimal(18, 2)
 
   @@unique([proformaInvoiceId, lineNo])
+}
+
+// ───────────────────────────── Customer receipts (Step 6) ─────────────────────────────
+
+enum ReceiptStatus {
+  POSTED
+  CANCELLED
+}
+
+/// Cash receipt (CR) or bank receipt (RV), spec §3.3.6. Until a tax invoice takes it, the money is a customer
+/// advance (liability). PDC receipts come with T6-02.
+model CustomerReceipt {
+  id                String           @id @default(cuid())
+  number            String           @unique
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  date              DateTime         @db.Date
+  amount            Decimal          @db.Decimal(18, 2)
+  mode              PaymentMode
+  bankAccountId     String?
+  bankAccount       BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  reference         String?
+  /// Optional: the proforma this advance is for (its SO's tax invoice will take it, T5-07).
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice? @relation(fields: [proformaInvoiceId], references: [id])
+  /// Part already applied to tax invoices (T5-07 / T6-01 allocation). Zero until tax invoices exist.
+  allocatedAmount   Decimal          @default(0) @db.Decimal(18, 2)
+  status            ReceiptStatus    @default(POSTED)
+  notes             String?
+  cancelReason      String?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+
+  @@index([customerId])
+  @@index([proformaInvoiceId])
 }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, FInput, SubmitButton } from "@/components/forms";
-import { Card, DefList, PageHeader, Stat, Table } from "@/components/ui";
+import { Badge, Card, DefList, LinkButton, PageHeader, Stat, Table } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { D } from "@/server/core";
 import { prisma } from "@/server/core";
@@ -16,7 +16,7 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const pi = await prisma.proformaInvoice.findUnique({
     where: { id },
-    include: { salesOrder: true, items: { orderBy: { lineNo: "asc" }, include: { product: true, taxCode: true } } },
+    include: { salesOrder: true, items: { orderBy: { lineNo: "asc" }, include: { product: true, taxCode: true } }, receipts: { orderBy: { createdAt: "asc" } } },
   });
   if (!pi) notFound();
   const status = effectivePiStatus(pi);
@@ -33,6 +33,7 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
           </span>
         }
         back={{ href: "/sales/proformas", label: "Proforma invoices" }}
+        actions={status === "ACTIVE" && has("receipts.create") && D(pi.total).gt(pi.receivedAmount) && <LinkButton href={`/receipts/new?pi=${pi.id}`}>Record receipt</LinkButton>}
       />
 
       {status === "EXPIRED" && (
@@ -45,7 +46,7 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
         <Stat label="Total" value={fmtAED(pi.total)} hint={`Net ${fmtMoney(pi.netTotal)} + VAT ${fmtMoney(pi.vatTotal)}`} />
         <Stat label="Valid until" value={fmtDate(pi.expiryDate)} hint={`${pi.validityDays} days`} />
         <Stat label="Sales order" value={<Link href={`/sales/orders/${pi.salesOrderId}`} className="text-primary hover:underline">{pi.salesOrder.number}</Link>} />
-        <Stat label="Renewals" value={String(pi.renewCount)} hint={pi.renewedAt ? `Last ${fmtDateTime(pi.renewedAt)}${renewedBy ? ` by ${renewedBy.name}` : ""}` : undefined} />
+        <Stat label="Received" value={fmtAED(pi.receivedAmount)} hint={D(pi.receivedAmount).gt(0) ? "Held as customer advance; a paid proforma does not expire" : undefined} />
       </div>
 
       <Card title="Details" className="mb-5">
@@ -56,6 +57,7 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
             ["Address", pi.customerAddress ?? "—"],
             ...(pi.customerTrn ? ([["Customer TRN", pi.customerTrn]] as [string, string][]) : []),
             ["PI date", fmtDate(pi.date)],
+            ["Renewals", pi.renewCount ? `${pi.renewCount} (last ${pi.renewedAt ? fmtDateTime(pi.renewedAt) : "—"}${renewedBy ? ` by ${renewedBy.name}` : ""})` : "—"],
             ["Prices", priceModeLabel(pi.priceMode)],
             ["Invoice discount", D(pi.discount).gt(0) ? fmtAED(pi.discount) : "—"],
             ["Terms", pi.terms ?? "—"],
@@ -113,6 +115,25 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
           </tfoot>
         </Table>
       </Card>
+
+      {pi.receipts.length > 0 && has("receipts.view") && (
+        <Card title="Receipts against this proforma" className="mb-5" pad={false}>
+          <Table>
+            <tbody>
+              {pi.receipts.map((r) => (
+                <tr key={r.id}>
+                  <td>
+                    <Link href={`/receipts/${r.id}`} className="font-medium text-primary hover:underline">{r.number}</Link>
+                  </td>
+                  <td>{fmtDate(r.date)}</td>
+                  <td>{r.status === "POSTED" ? <Badge tone="success">Posted</Badge> : <Badge tone="danger">Cancelled</Badge>}</td>
+                  <td className="num">{fmtMoney(r.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        </Card>
+      )}
 
       {status === "EXPIRED" && has("sales.renewPi") && (
         <Card title="Renew" className="mb-5">

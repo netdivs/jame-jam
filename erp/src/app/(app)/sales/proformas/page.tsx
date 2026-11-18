@@ -18,9 +18,9 @@ export default async function ProformasPage({ searchParams }: { searchParams: Pr
   // "Expired" includes active PIs already past their expiry date (the daily job may not have run yet).
   const statusWhere: Prisma.ProformaInvoiceWhereInput =
     status === "EXPIRED"
-      ? { OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiryDate: { lt: now } }] }
+      ? { OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiryDate: { lt: now }, receivedAmount: 0 }] }
       : status === "ACTIVE"
-        ? { status: "ACTIVE", expiryDate: { gte: now } }
+        ? { status: "ACTIVE", OR: [{ expiryDate: { gte: now } }, { receivedAmount: { gt: 0 } }] }
         : status && status in FILTERS
           ? { status: status as Filter }
           : {};
@@ -28,7 +28,7 @@ export default async function ProformasPage({ searchParams }: { searchParams: Pr
     AND: [statusWhere, q ? { OR: [{ number: { contains: q, mode: "insensitive" } }, { customerName: { contains: q, mode: "insensitive" } }, { salesOrder: { number: { contains: q, mode: "insensitive" } } }] } : {}],
   };
   const rows = await prisma.proformaInvoice.findMany({ where, include: { salesOrder: { select: { id: true, number: true } } }, orderBy: [{ date: "desc" }, { number: "desc" }], take: 300 });
-  const expiredCount = await prisma.proformaInvoice.count({ where: { OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiryDate: { lt: now } }] } });
+  const expiredCount = await prisma.proformaInvoice.count({ where: { OR: [{ status: "EXPIRED" }, { status: "ACTIVE", expiryDate: { lt: now }, receivedAmount: 0 }] } });
 
   return (
     <>

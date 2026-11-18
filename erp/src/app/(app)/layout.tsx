@@ -31,12 +31,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     },
     {
       label: "Sales",
-      items: has("sales.view")
-        ? [
-            { href: "/sales/orders", label: "Sales orders", icon: "salesOrders" },
-            { href: "/sales/proformas", label: "Proforma invoices", icon: "proformas" },
-          ]
-        : [],
+      items: [
+        ...(has("sales.view")
+          ? [
+              { href: "/sales/orders", label: "Sales orders", icon: "salesOrders" as const },
+              { href: "/sales/proformas", label: "Proforma invoices", icon: "proformas" as const },
+            ]
+          : []),
+        ...(has("receipts.view") ? [{ href: "/receipts", label: "Customer receipts", icon: "receipts" as const }] : []),
+      ],
     },
     {
       label: "Purchase",

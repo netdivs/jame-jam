@@ -1,6 +1,6 @@
 // Step 5 — Sales orders and proforma invoices: D1 (SO + reservation), D4 (VAT maths, C4 proposal), R1 (PI expiry).
 import { describe, expect, it } from "vitest";
-import { AppError, D, ZERO, prisma, round2, sum, toDateOnly } from "../src/server/core";
+import { AppError, D, ZERO, prisma, round2, sum, toDateOnly, today } from "../src/server/core";
 import { inventoryReconciliation } from "../src/server/inventory/queries";
 import { createOpeningLot } from "../src/server/inventory/lots";
 import { computeDocument, salesRate } from "../src/server/sales/vat";
@@ -14,6 +14,7 @@ import {
   expireProformaInvoices,
   renewProformaInvoice,
 } from "../src/server/sales/proformas";
+import { cancelCustomerReceipt, customerAdvanceBalance, recordCustomerReceipt } from "../src/server/receipts/receipts";
 import { ctxFor, makeProduct, slabLot, uid, warehouseId } from "./helpers";
 
 const DATE = "2026-04-01";
@@ -352,5 +353,74 @@ describe("proforma invoice (R1)", () => {
     const log = await prisma.auditLog.findFirstOrThrow({ where: { entity: "ProformaInvoice", entityId: pi.id, action: "renew" } });
     expect(log.userId).toBe(manager.userId);
     await expectError(renewProformaInvoice(manager, pi.id), "VALIDATION", /has not expired/);
+  });
+});
+
+// ───────────────────────────── Customer receipts / advances (T6-01, advance part) ─────────────────────────────
+
+describe("customer receipts and advances (T6-01)", () => {
+  const NOW = today().toISOString().slice(0, 10);
+  async function piFor(total = "10") {
+    const sales = await ctxFor("sales");
+    const tiles = await tileBucket("50");
+    const cust = await customer();
+    const so = await saveSalesOrder(sales, null, { customerId: cust.id, date: NOW, lines: [{ balanceId: tiles.id, sqm: total, unitPrice: "100" }] });
+    const pi = await createProformaInvoice(sales, { salesOrderId: so.id, date: NOW });
+    return { sales, cust, so, pi };
+  }
+
+  it("records an advance against a PI: Dr bank / Cr customer advances; capped at the PI total; the PI no longer expires", async () => {
+    const { sales, cust, pi } = await piFor("10"); // AED 1,000 incl.
+    const before = await customerAdvanceBalance(cust.id);
+    const rv = await recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: NOW, amount: "400", mode: "BANK", reference: "TT-1" });
+    expect(rv.number).toMatch(/^RV-26\d{4}$/);
+    expect(rv.customerId).toBe(cust.id);
+    expect(rv.bankAccountId).toBe("bank_main");
+    expect((await customerAdvanceBalance(cust.id)).minus(before).toString()).toBe("400");
+    const je = await prisma.journalEntry.findFirstOrThrow({ where: { sourceType: "CUSTOMER_RECEIPT", sourceId: rv.id }, include: { lines: { include: { account: true } } } });
+    expect(je.lines.find((l) => l.account.systemKey === "BANK_MAIN")?.debit.toString()).toBe("400");
+    expect(je.lines.find((l) => l.account.systemKey === "CUSTOMER_ADVANCES")?.credit.toString()).toBe("400");
+
+    await expectError(recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: NOW, amount: "600.01", mode: "CASH" }), "VALIDATION", /600.00 left/);
+    const cr = await recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: NOW, amount: "600", mode: "CASH" });
+    expect(cr.number).toMatch(/^CR-26\d{4}$/);
+
+    const paid = await prisma.proformaInvoice.findUniqueOrThrow({ where: { id: pi.id } });
+    expect(paid.receivedAmount.toString()).toBe("1000");
+    const farFuture = addDays(paid.expiryDate, 30);
+    expect(effectivePiStatus(paid, farFuture)).toBe("ACTIVE");
+    await expireProformaInvoices(farFuture);
+    expect((await prisma.proformaInvoice.findUniqueOrThrow({ where: { id: pi.id } })).status).toBe("ACTIVE");
+  });
+
+  it("an expired PI cannot be paid until renewed; customer must match; general advances need a customer", async () => {
+    const { sales, cust, pi } = await piFor("5");
+    const other = await customer();
+    await expectError(recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, customerId: other.id, date: NOW, amount: "1", mode: "CASH" }), "VALIDATION", /another customer/);
+    await expectError(recordCustomerReceipt(sales, { date: NOW, amount: "1", mode: "CASH" }), "VALIDATION", /customer/);
+    const general = await recordCustomerReceipt(sales, { customerId: cust.id, date: NOW, amount: "250", mode: "CASH" });
+    expect(general.proformaInvoiceId).toBeNull();
+
+    // Backdate the PI so it is past its expiry today.
+    await prisma.proformaInvoice.update({ where: { id: pi.id }, data: { expiryDate: toDateOnly("2026-01-01") } });
+    await expectError(recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: NOW, amount: "1", mode: "CASH" }), "VALIDATION", /expired/);
+    await renewProformaInvoice(await ctxFor("manager"), pi.id, "customer paying now");
+    expect((await recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: NOW, amount: "1", mode: "CASH" })).amount.toString()).toBe("1");
+  });
+
+  it("cancelling posts the reverse entry, frees the PI amount, needs permission and a reason; storekeeper cannot receive", async () => {
+    const { sales, cust, pi } = await piFor("3");
+    const acct = await ctxFor("accountant");
+    const r = await recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: NOW, amount: "300", mode: "CASH" });
+    const before = await customerAdvanceBalance(cust.id);
+    await expectError(cancelCustomerReceipt(sales, r.id, { reason: "typo" }), "FORBIDDEN");
+    await expectError(cancelCustomerReceipt(acct, r.id, { reason: "" }), "VALIDATION");
+    const c = await cancelCustomerReceipt(acct, r.id, { reason: "Wrong customer" });
+    expect(c.status).toBe("CANCELLED");
+    expect((await customerAdvanceBalance(cust.id)).minus(before).toString()).toBe("-300");
+    expect((await prisma.proformaInvoice.findUniqueOrThrow({ where: { id: pi.id } })).receivedAmount.toString()).toBe("0");
+    await expectError(cancelCustomerReceipt(acct, r.id, { reason: "again" }), "VALIDATION", /already cancelled/);
+    await expectError(recordCustomerReceipt(await ctxFor("storekeeper"), { customerId: cust.id, date: NOW, amount: "1", mode: "CASH" }), "FORBIDDEN");
+    await expectError(recordCustomerReceipt(await ctxFor("manager"), { customerId: cust.id, date: NOW, amount: "1", mode: "CASH" }), "FORBIDDEN"); // spec §5: Manager views receipts
   });
 });
