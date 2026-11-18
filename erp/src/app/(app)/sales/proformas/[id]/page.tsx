@@ -144,7 +144,11 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
         </Card>
       )}
 
-      {PI_OPEN.includes(pi.status) && has("sales.cancel") && (
+      {PI_OPEN.includes(pi.status) && has("sales.cancel") && D(pi.receivedAmount).gt(0) && (
+        <p className="mb-5 text-sm text-muted">This proforma holds {fmtAED(pi.receivedAmount)} received. Cancel or refund those receipts before closing or cancelling it.</p>
+      )}
+
+      {PI_OPEN.includes(pi.status) && has("sales.cancel") && D(pi.receivedAmount).isZero() && (
         <Card title="Close or cancel" className="mb-5">
           <div className="grid gap-6 md:grid-cols-2">
             <ActionForm action={closePiAction.bind(null, id, "CLOSED")} className="grid gap-3">

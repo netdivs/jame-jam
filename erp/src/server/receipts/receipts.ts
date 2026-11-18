@@ -43,6 +43,7 @@ export async function recordCustomerReceipt(ctx: Ctx, raw: unknown) {
       const pi = await lockPi(tx, input.proformaInvoiceId);
       if (customerId && customerId !== pi.customerId) throw new AppError("VALIDATION", `Proforma ${pi.number} is for another customer`);
       customerId = pi.customerId;
+      if (date < pi.date) throw new AppError("VALIDATION", `The receipt cannot be dated before proforma ${pi.number} (${pi.date.toISOString().slice(0, 10)})`);
       assertPiUsable(pi, "Receiving payment", date > today() ? date : today());
       const open = D(pi.total).minus(pi.receivedAmount);
       if (amount.gt(open)) {

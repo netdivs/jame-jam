@@ -310,7 +310,9 @@ Done without waiting for client decisions, in this order: T8-03 → T8-02 → T8
 - **Scheduled jobs (TJ-01, TD-023):** proforma expiry, session clean-up, stock = GL check; once per business day; Settings → Scheduled jobs. The `jobs` service in `docker-compose.prod.yml` takes effect only at the release.
 - **Tax code rule on purchase lines (T5-09, TD-022).**
 
-**Verification (18 Nov 2026):** typecheck, lint and build pass; Vitest 74/74; no migration drift; Playwright 6/6 twice (purchase; sales with receipts; accounts — desktop and Pixel 7). The job runner ran twice on the E2E database: first run OK (stock = GL, difference 0), second run skipped every job.
+**Independent code review (18 Nov 2026):** one Major defect (duplicate SO line id in an edit) and one rule gap (paid proforma could be cancelled) fixed with regression tests; six Minor items fixed (see CHANGELOG). Remaining nits: the reversal audit row has no `before`; partial-PI discount shares can differ from the SO by a few fils (PIs post nothing — the tax invoice must recompute from the SO); a PI can be backdated so it is born expired.
+
+**Verification (18 Nov 2026, after the review fixes):** typecheck, lint and build pass; Vitest 77/77; no migration drift; Playwright 6/6 twice (purchase; sales with receipts; accounts — desktop and Pixel 7). The job runner ran twice on the E2E database: first run OK (stock = GL, difference 0), second run skipped every job.
 
 ## 7. Deployment
 

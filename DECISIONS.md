@@ -94,6 +94,7 @@ If the client answers differently, record a new entry and mark the old one `Supe
 | TD-022 | Purchase lines: SR, and RC from an import supplier, are the standard codes; any other code needs `taxCode.change` and a reason. A supplier invoice line that keeps its PO line's code needs nothing new | Spec §3.3.5; RC is the normal code for imports, so a reason on every import line would add no control | 18 Nov 2026 | Confirmed (technical; review with client with C1) |
 | TD-023 | Scheduled jobs: in-repo job modules, `scripts/run-jobs.ts` runner, a `jobs` service in docker-compose.prod.yml waking hourly (TZ Asia/Dubai); `JobRun` (job, business date) makes each job run once a day; manual runs from Settings → Scheduled jobs | No new dependency; follows docs/architecture/background-jobs.md §3 | 18 Nov 2026 | Confirmed (technical); compose change applied only at the release |
 | TD-024 | Each bank account has its own GL account under Cash & Bank (1131+, systemKey `BANK_<code>`); the existing "Bank - Main Account" becomes the default bank account (migration backfill) | Per-bank balances, statements and reconciliation (spec §3.4, F9) | 18 Nov 2026 | Confirmed (technical) |
+| TD-025 | A proforma with money received cannot be closed or cancelled, and its sales order cannot be cancelled, until those receipts are cancelled or refunded | Otherwise reserved stock could be released and resold while the customer's advance points at a cancelled PI (code review, 18 Nov 2026) | 18 Nov 2026 | Confirmed (technical; review with client in Step 6 UAT) |
 
 ## 5. Superseded
 

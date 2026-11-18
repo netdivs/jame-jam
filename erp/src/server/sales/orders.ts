@@ -155,8 +155,12 @@ export async function saveSalesOrder(ctx: Ctx, id: string | null, raw: unknown) 
       }
       const livePi = await tx.proformaInvoice.findFirst({ where: { salesOrderId: before.id, status: { in: ["ACTIVE", "EXPIRED"] } } });
       if (livePi) throw new AppError("VALIDATION", `Proforma ${livePi.number} quotes this SO. Cancel or close it before editing the SO.`);
+      const ids = new Set<string>();
       for (const l of input.lines) {
-        if (l.id && !before.items.some((it) => it.id === l.id)) throw new AppError("VALIDATION", "A line does not belong to this sales order");
+        if (!l.id) continue;
+        if (!before.items.some((it) => it.id === l.id)) throw new AppError("VALIDATION", "A line does not belong to this sales order");
+        if (ids.has(l.id)) throw new AppError("VALIDATION", "The same order line appears twice");
+        ids.add(l.id);
       }
     }
     const prevTax = new Map((before?.items ?? []).map((it) => [it.id, { taxCodeId: it.taxCodeId, taxReason: it.taxReason }]));
@@ -237,14 +241,21 @@ export async function cancelSalesOrder(ctx: Ctx, id: string, reason: string) {
     if (so.status !== "OPEN") {
       throw new AppError("VALIDATION", `SO ${so.number} is ${soStatusLabel(so.status)}; only an open SO with nothing invoiced can be cancelled`);
     }
+    // Lock the live proformas (SO → PI order) and refuse while money is held against one (TD-025).
+    const pis = await tx.$queryRaw<{ id: string }[]>`
+      SELECT "id" FROM "ProformaInvoice" WHERE "salesOrderId" = ${id} AND "status" IN ('ACTIVE', 'EXPIRED') ORDER BY "id" FOR UPDATE`;
+    const live = await tx.proformaInvoice.findMany({ where: { id: { in: pis.map((p) => p.id) } } });
+    const paid = live.find((p) => D(p.receivedAmount).gt(0));
+    if (paid) {
+      throw new AppError("VALIDATION", `Proforma ${paid.number} has AED ${D(paid.receivedAmount).toFixed(2)} received. Cancel or refund those receipts before cancelling the sales order.`);
+    }
     await lockBuckets(tx, so.items.map((i) => i.balanceId));
     for (const it of so.items) {
       if (!it.reservationId) continue;
       const r = await tx.stockReservation.findUniqueOrThrow({ where: { id: it.reservationId } });
       if (r.status === "ACTIVE") await releaseReservation(tx, ctx, { reservationId: r.id, reason: `SO ${so.number} cancelled: ${why}` });
     }
-    const pis = await tx.proformaInvoice.findMany({ where: { salesOrderId: id, status: { in: ["ACTIVE", "EXPIRED"] } } });
-    for (const pi of pis) {
+    for (const pi of live) {
       await tx.proformaInvoice.update({ where: { id: pi.id }, data: { status: "CANCELLED", closeReason: `SO ${so.number} cancelled: ${why}` } });
       await audit(tx, ctx, { action: "cancel", entity: "ProformaInvoice", entityId: pi.id, before: { status: pi.status }, after: { status: "CANCELLED" }, meta: { reason: why, viaSalesOrder: so.number } });
     }

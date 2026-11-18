@@ -58,8 +58,11 @@ describe("bank accounts (T8-03)", () => {
     expect((await accountBalance(prisma, "BANK_MAIN")).minus(mainBefore).toString()).toBe("-200");
 
     await expectError(recordSupplierPayment(acct, { purchaseOrderId: po.id, date: DATE, amount: "1", mode: "CASH", bankAccountId: enbd.id }), "VALIDATION", /cash payment/);
-    await saveBankAccount(acct, enbd.id, { name: enbd.name, active: "" });
-    await expectError(recordSupplierPayment(acct, { purchaseOrderId: po.id, date: DATE, amount: "1", mode: "BANK", bankAccountId: enbd.id }), "VALIDATION", /inactive/);
+    // A bank with a balance cannot be deactivated (its entries must stay reversible).
+    await expectError(saveBankAccount(acct, enbd.id, { name: enbd.name, active: "" }), "VALIDATION", /still has a balance/);
+    const empty = await saveBankAccount(acct, null, { name: `Empty ${uid()}`, active: "true" });
+    await saveBankAccount(acct, empty.id, { name: empty.name, active: "" });
+    await expectError(recordSupplierPayment(acct, { purchaseOrderId: po.id, date: DATE, amount: "1", mode: "BANK", bankAccountId: empty.id }), "VALIDATION", /inactive/);
   });
 
   it("only one default; only Owner/Accountant manage banks; IBAN is checked", async () => {
@@ -180,5 +183,11 @@ describe("scheduled jobs (TJ-01)", () => {
     const manual = await runJobNow(await ctxFor("manager"), "session-cleanup");
     expect(manual.status).toBe("OK");
     await expectError(runJobNow(await ctxFor("owner"), "nope"), "VALIDATION");
+
+    // A failed run is retried by the next wake-up the same day; a successful one is not.
+    await prisma.jobRun.updateMany({ where: { job: "session-cleanup", runKey: "2027-06-30" }, data: { status: "FAILED", error: "simulated" } });
+    const retried = await runDailyJobs(asOf);
+    expect(retried.find((o) => o.job === "session-cleanup")?.status).toBe("OK");
+    expect(retried.find((o) => o.job === "pi-expiry")?.status).toBe("SKIPPED");
   });
 });

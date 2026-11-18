@@ -14,6 +14,15 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - Migrations (additive): `bank_accounts` (with backfill of the main bank), `customer_receipts`, `job_runs`, `purchase_tax_reason`.
 - Tests: 74 Vitest; Playwright 6 (purchase, sales with receipts, accounts — desktop and mobile).
 
+### Fixed — code review (18 Nov 2026)
+- Editing a sales order with the same line twice is refused (it could corrupt totals and leave stock reserved).
+- A proforma holding money cannot be closed or cancelled, nor its sales order cancelled, until the receipts are cancelled (TD-025).
+- A receipt cannot be dated before its proforma.
+- Editing a PO no longer asks again for the reason of an unchanged tax code.
+- A failed or stuck scheduled job is retried the same day.
+- Bank accounts: account codes checked across the chart, one default guaranteed, default changes audited, and a bank with a balance cannot be deactivated.
+- docker-compose.prod.yml: the app also runs in Dubai time (TS-03), so app and jobs agree on the business date.
+
 ### Added — Step 5 Sales, part 1 (not deployed)
 - Sales orders that reserve stock on save; editing adjusts and cancelling releases the reservations.
 - Proforma invoices from a sales order: validity from settings, expiry (job-ready), audited renewal, close/cancel. No accounting.

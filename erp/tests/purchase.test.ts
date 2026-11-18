@@ -462,6 +462,9 @@ describe("tax code rule on purchase lines (T5-09, TD-022)", () => {
     await expect(po(imp.id, os.id)).rejects.toThrow(/reason/);
     const ok = await po(local.id, os.id, "Supplier is in a designated zone");
     expect(ok.items[0].taxReason).toBe("Supplier is in a designated zone");
+    // Editing the PO without changing that code keeps the reason; no new one is asked for.
+    const edited = await savePurchaseOrder(acct, ok.id, { supplierId: local.id, date: DATE, notes: "edited", lines: [{ productId: product.id, sqm: "2", unitPrice: "10", taxCodeId: os.id }] });
+    expect(edited.items[0].taxReason).toBe("Supplier is in a designated zone");
 
     // Without the permission the reason does not help.
     const noPerm = { ...acct, permissions: new Set([...acct.permissions].filter((p) => p !== "taxCode.change")) };

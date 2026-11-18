@@ -41,8 +41,15 @@ async function runOne(job: string, runKey: string, asOf: Date, trigger: "schedul
   try {
     runId = (await prisma.jobRun.create({ data: { job, runKey, trigger, userId: ctx.userId } })).id;
   } catch (e) {
-    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return { job, status: "SKIPPED" };
-    throw e;
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) throw e;
+    // Already run today. Retry only a failed run, or one stuck RUNNING (container killed) for over an hour.
+    const stale = new Date(Date.now() - 3_600_000);
+    const retry = await prisma.jobRun.updateMany({
+      where: { job, runKey, OR: [{ status: "FAILED" }, { status: "RUNNING", startedAt: { lt: stale } }] },
+      data: { status: "RUNNING", error: null, result: Prisma.DbNull, startedAt: new Date(), finishedAt: null, trigger },
+    });
+    if (retry.count === 0) return { job, status: "SKIPPED" };
+    runId = (await prisma.jobRun.findUniqueOrThrow({ where: { job_runKey: { job, runKey } } })).id;
   }
   try {
     const out = await def.run(asOf, ctx);

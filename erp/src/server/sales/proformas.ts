@@ -219,6 +219,9 @@ export async function closeProformaInvoice(ctx: Ctx, id: string, kind: "CLOSED" 
   return inTx(async (tx) => {
     const pi = await lockPi(tx, id);
     if (!PI_OPEN.includes(pi.status)) throw new AppError("VALIDATION", `Proforma ${pi.number} is already ${pi.status.toLowerCase()}`);
+    if (D(pi.receivedAmount).gt(0)) {
+      throw new AppError("VALIDATION", `Proforma ${pi.number} has AED ${D(pi.receivedAmount).toFixed(2)} received. Cancel or refund those receipts first (TD-025).`);
+    }
     const after = await tx.proformaInvoice.update({ where: { id }, data: { status: kind, closeReason: why } });
     await audit(tx, ctx, { action: kind === "CLOSED" ? "close" : "cancel", entity: "ProformaInvoice", entityId: id, before: { status: pi.status }, after: { status: kind, reason: why } });
     return after;

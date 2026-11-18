@@ -424,3 +424,49 @@ describe("customer receipts and advances (T6-01)", () => {
     await expectError(recordCustomerReceipt(await ctxFor("manager"), { customerId: cust.id, date: NOW, amount: "1", mode: "CASH" }), "FORBIDDEN"); // spec §5: Manager views receipts
   });
 });
+
+describe("review fixes", () => {
+  const NOW = today().toISOString().slice(0, 10);
+
+  it("rejects the same SO line id twice in an edit (totals and reservations stay consistent)", async () => {
+    const sales = await ctxFor("sales");
+    const a = await tileBucket("20");
+    const b = await tileBucket("20");
+    const cust = await customer();
+    const so = await saveSalesOrder(sales, null, { customerId: cust.id, date: DATE, lines: [{ balanceId: a.id, sqm: "10", unitPrice: "100" }] });
+    const id = so.items[0].id;
+    await expectError(
+      saveSalesOrder(sales, so.id, { customerId: cust.id, date: DATE, lines: [{ id, balanceId: a.id, sqm: "10", unitPrice: "100" }, { id, balanceId: b.id, sqm: "5", unitPrice: "100" }] }),
+      "VALIDATION",
+      /appears twice/,
+    );
+    expect(D((await bucket(a.id)).reservedSqm).toString()).toBe("10");
+    expect(D((await bucket(b.id)).reservedSqm).toString()).toBe("0");
+  });
+
+  it("a proforma holding money cannot be closed, nor its SO cancelled, until the receipts are cancelled (TD-025)", async () => {
+    const sales = await ctxFor("sales");
+    const manager = await ctxFor("manager");
+    const acct = await ctxFor("accountant");
+    const tiles = await tileBucket("10");
+    const cust = await customer();
+    const so = await saveSalesOrder(sales, null, { customerId: cust.id, date: NOW, lines: [{ balanceId: tiles.id, sqm: "2", unitPrice: "100" }] });
+    const pi = await createProformaInvoice(sales, { salesOrderId: so.id, date: NOW });
+    const r = await recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: NOW, amount: "50", mode: "CASH" });
+    await expectError(closeProformaInvoice(manager, pi.id, "CLOSED", "no"), "VALIDATION", /received/);
+    await expectError(cancelSalesOrder(manager, so.id, "no"), "VALIDATION", /received/);
+    expect(D((await bucket(tiles.id)).reservedSqm).toString()).toBe("2");
+    await cancelCustomerReceipt(acct, r.id, { reason: "refund agreed" });
+    expect((await cancelSalesOrder(manager, so.id, "customer withdrew")).status).toBe("CANCELLED");
+  });
+
+  it("a receipt cannot be dated before its proforma", async () => {
+    const sales = await ctxFor("sales");
+    const tiles = await tileBucket("10");
+    const cust = await customer();
+    const so = await saveSalesOrder(sales, null, { customerId: cust.id, date: NOW, lines: [{ balanceId: tiles.id, sqm: "1", unitPrice: "100" }] });
+    const pi = await createProformaInvoice(sales, { salesOrderId: so.id, date: NOW });
+    await expectError(recordCustomerReceipt(sales, { proformaInvoiceId: pi.id, date: "2026-01-02", amount: "1", mode: "CASH" }), "VALIDATION", /before proforma/);
+  });
+});
+

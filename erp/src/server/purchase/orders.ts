@@ -85,7 +85,8 @@ export const poSchema = z.object({
 });
 export type PoInput = z.input<typeof poSchema>;
 
-async function buildLines(tx: Tx, ctx: Ctx, supplierType: string, lines: z.output<typeof lineSchema>[]) {
+/** `previous`: tax code and reason of the PO's current lines by line number (edit), so an unchanged code needs nothing new. */
+async function buildLines(tx: Tx, ctx: Ctx, supplierType: string, lines: z.output<typeof lineSchema>[], previous = new Map<number, { taxCodeId: string; taxReason: string | null }>()) {
   const products = await tx.product.findMany({ where: { id: { in: lines.map((l) => l.productId) } } });
   const taxes = await tx.taxCode.findMany({ where: { id: { in: lines.map((l) => l.taxCodeId) } } });
   const pById = new Map(products.map((p) => [p.id, p]));
@@ -95,7 +96,12 @@ async function buildLines(tx: Tx, ctx: Ctx, supplierType: string, lines: z.outpu
     if (!p || !p.active) throw new AppError("VALIDATION", `Line ${i + 1}: select an active product`);
     const t = tById.get(l.taxCodeId);
     if (!t || !t.active) throw new AppError("VALIDATION", `Line ${i + 1}: select an active tax code`);
-    const taxReason = isStandardPurchaseCode(t.type, supplierType) ? null : requireTaxReason(ctx, { line: i + 1, code: t.code, reason: l.taxReason, field: `lines.${i}.taxReason` });
+    const prev = previous.get(i + 1);
+    const taxReason = isStandardPurchaseCode(t.type, supplierType)
+      ? null
+      : prev && prev.taxCodeId === t.id && !l.taxReason
+        ? prev.taxReason
+        : requireTaxReason(ctx, { line: i + 1, code: t.code, reason: l.taxReason, field: `lines.${i}.taxReason` });
     const sqm = round4(l.sqm);
     const unitPrice = round4(l.unitPrice);
     const a = lineAmounts(sqm, unitPrice, t);
@@ -123,7 +129,10 @@ export async function savePurchaseOrder(ctx: Ctx, id: string | null, raw: unknow
   return inTx(async (tx) => {
     const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
     if (!supplier || !supplier.active) throw new AppError("VALIDATION", "Select an active supplier");
-    const lines = await buildLines(tx, ctx, supplier.supplierType, input.lines);
+    const previous = id
+      ? new Map((await tx.purchaseOrderItem.findMany({ where: { purchaseOrderId: id } })).map((it) => [it.lineNo, { taxCodeId: it.taxCodeId, taxReason: it.taxReason }]))
+      : undefined;
+    const lines = await buildLines(tx, ctx, supplier.supplierType, input.lines, previous);
     const totals = {
       netTotal: sum(lines.map((l) => l.netAmount)),
       vatTotal: sum(lines.map((l) => l._vat)),

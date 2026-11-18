@@ -26,6 +26,8 @@ services:
     environment:
       DATABASE_URL: postgresql://jamejam:${POSTGRES_PASSWORD}@db:5432/jamejam?schema=public
       SESSION_TTL_HOURS: ${SESSION_TTL_HOURS:-12}
+      # Business dates (today()) in Dubai time, same as the jobs service (TS-03).
+      TZ: Asia/Dubai
     ports:
       - "127.0.0.1:${APP_PORT:-3010}:3000"
 

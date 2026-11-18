@@ -3,7 +3,7 @@
 // Payments and receipts by bank pick the bank account; posting code resolves its GL account here.
 import type { PaymentMode } from "@prisma/client";
 import { z } from "zod";
-import { AppError, Ctx, Tx, assertCan, audit, inTx, rethrowUnique } from "../core";
+import { AppError, Ctx, D, Tx, assertCan, audit, inTx, rethrowUnique } from "../core";
 import { optText, parse, reqText } from "../validation";
 
 const CASH_BANK_GROUP = "1100";
@@ -33,10 +33,10 @@ async function nextBankCode(tx: Tx): Promise<string> {
   }
 }
 
-/** Next free GL code under Cash & Bank (1131, 1132, …). */
-async function nextGlCode(tx: Tx, parentId: string): Promise<string> {
-  const siblings = await tx.account.findMany({ where: { parentId }, select: { code: true } });
-  const used = new Set(siblings.map((s) => s.code));
+/** Next free GL code for a bank (1131, 1132, …). Account codes are unique across the whole chart. */
+async function nextGlCode(tx: Tx): Promise<string> {
+  const taken = await tx.account.findMany({ where: { code: { gte: "1131", lte: "1199" } }, select: { code: true } });
+  const used = new Set(taken.map((s) => s.code));
   for (let c = 1131; c < 1200; c++) if (!used.has(String(c))) return String(c);
   throw new AppError("CONFLICT", "No free account code left under Cash & Bank");
 }
@@ -46,8 +46,17 @@ export async function saveBankAccount(ctx: Ctx, id: string | null, raw: unknown)
   const input = parse(bankSchema, raw);
   return inTx(async (tx) => {
     try {
+      // Serialise bank-account changes (codes and the single default) on the Cash & Bank group row.
+      const group0 = await tx.account.findUniqueOrThrow({ where: { code: CASH_BANK_GROUP } });
+      await tx.$queryRaw`SELECT "id" FROM "Account" WHERE "id" = ${group0.id} FOR UPDATE`;
       if (input.isDefault && !input.active) throw new AppError("VALIDATION", "The default bank account must be active");
-      if (input.isDefault) await tx.bankAccount.updateMany({ where: { isDefault: true, ...(id ? { id: { not: id } } : {}) }, data: { isDefault: false } });
+      if (input.isDefault) {
+        const others = await tx.bankAccount.findMany({ where: { isDefault: true, ...(id ? { id: { not: id } } : {}) } });
+        for (const o of others) {
+          await tx.bankAccount.update({ where: { id: o.id }, data: { isDefault: false } });
+          await audit(tx, ctx, { action: "update", entity: "BankAccount", entityId: o.id, before: { isDefault: true }, after: { isDefault: false }, meta: { reason: "Another bank account became the default" } });
+        }
+      }
       const data = {
         name: input.name,
         bankName: input.bankName ?? null,
@@ -62,16 +71,22 @@ export async function saveBankAccount(ctx: Ctx, id: string | null, raw: unknown)
         const before = await tx.bankAccount.findUnique({ where: { id } });
         if (!before) throw new AppError("NOT_FOUND", "Bank account not found");
         if (before.isDefault && !input.isDefault) throw new AppError("VALIDATION", "Make another bank account the default instead");
+        if (before.active && !input.active) {
+          const agg = await tx.journalLine.aggregate({ where: { accountId: before.accountId }, _sum: { debit: true, credit: true } });
+          const balance = D(agg._sum.debit ?? 0).minus(D(agg._sum.credit ?? 0));
+          if (!balance.isZero()) {
+            throw new AppError("VALIDATION", `${before.name} still has a balance of AED ${balance.toFixed(2)}. Transfer it out before deactivating, so its entries can still be reversed.`);
+          }
+        }
         const after = await tx.bankAccount.update({ where: { id }, data });
         // The GL account follows the name and status; postings to an inactive account are refused by postJournal.
         await tx.account.update({ where: { id: before.accountId }, data: { name: `Bank - ${input.name}`, active: input.active } });
-        await audit(tx, ctx, { action: "update", entity: "BankAccount", entityId: id, before, after });
+        await audit(tx, ctx, { action: "update", entity: "BankAccount", entityId: id, before, after, meta: { glAccount: { name: `Bank - ${input.name}`, active: input.active } } });
         return after;
       }
-      const group = await tx.account.findUniqueOrThrow({ where: { code: CASH_BANK_GROUP } });
-      const glCode = await nextGlCode(tx, group.id);
+      const glCode = await nextGlCode(tx);
       const account = await tx.account.create({
-        data: { code: glCode, name: `Bank - ${input.name}`, type: "ASSET", parentId: group.id, systemKey: `BANK_${glCode}`, active: input.active },
+        data: { code: glCode, name: `Bank - ${input.name}`, type: "ASSET", parentId: group0.id, systemKey: `BANK_${glCode}`, active: input.active },
       });
       const after = await tx.bankAccount.create({ data: { ...data, code: await nextBankCode(tx), accountId: account.id } });
       await audit(tx, ctx, { action: "create", entity: "BankAccount", entityId: after.id, after: { ...after, glAccount: glCode } });
