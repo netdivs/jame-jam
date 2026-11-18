@@ -10,6 +10,7 @@ import { postJournal } from "../accounting/gl";
 import { revalueLot, revaluationLines, splitAmount } from "../inventory/costing";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
 import { LIVE, lineAmounts, lockPo, paymentStatusOf, refreshPoStatus } from "./orders";
+import { isStandardPurchaseCode, requireTaxReason } from "../tax-rules";
 
 const optDec = (o: Parameters<typeof decimal>[0]) => z.union([decimal(o), z.literal("").transform(() => undefined)]).optional();
 
@@ -29,6 +30,8 @@ export const invoiceSchema = z.object({
         sqm: decimal({ gt: 0, dp: 4, label: "SQM" }),
         unitPrice: decimal({ min: 0, dp: 4, label: "Unit price" }),
         taxCodeId: reqText("Tax code"),
+        /** Needed when the code differs from the PO line's and is not the standard one. */
+        taxReason: optText(500),
       }),
     )
     .min(1, "Add at least one line"),
@@ -62,6 +65,12 @@ export async function postSupplierInvoice(ctx: Ctx, raw: unknown) {
         if (!item) throw new AppError("VALIDATION", `Line ${i + 1} does not belong to PO ${po.number}`);
         const tax = taxById.get(l.taxCodeId);
         if (!tax || !tax.active) throw new AppError("VALIDATION", `Line ${i + 1}: select an active tax code`);
+        const taxReason =
+          tax.id === item.taxCodeId
+            ? item.taxReason
+            : isStandardPurchaseCode(tax.type, po.supplier.supplierType)
+              ? null
+              : requireTaxReason(ctx, { line: i + 1, code: tax.code, reason: l.taxReason, field: `lines.${i}.taxReason` });
         const sqm = round4(l.sqm);
         const already = pending.get(item.id) ?? ZERO;
         const open = D(item.receivedSqm).minus(item.invoicedSqm).minus(already);
@@ -73,7 +82,7 @@ export async function postSupplierInvoice(ctx: Ctx, raw: unknown) {
         }
         pending.set(item.id, already.plus(sqm));
         const unitPrice = round4(l.unitPrice);
-        return { item, tax, sqm, unitPrice, ...lineAmounts(sqm, unitPrice, tax) };
+        return { item, tax, taxReason, sqm, unitPrice, ...lineAmounts(sqm, unitPrice, tax) };
       });
 
       // GRNI to clear per line: at PO price; the last part of a line clears the exact residual.
@@ -116,6 +125,7 @@ export async function postSupplierInvoice(ctx: Ctx, raw: unknown) {
               sqm: l.sqm,
               unitPrice: l.unitPrice,
               taxCodeId: l.tax.id,
+              taxReason: l.taxReason,
               netAmount: l.net,
               vatAmount: l.vat.plus(l.rcVat),
               grniAmount: l.grni,

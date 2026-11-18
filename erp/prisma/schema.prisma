@@ -689,6 +689,8 @@ model PurchaseOrderItem {
   unitPrice       Decimal               @db.Decimal(18, 4)
   taxCodeId       String
   taxCode         TaxCode               @relation(fields: [taxCodeId], references: [id])
+  /// Required when the tax code is not the standard one (SR, or RC from an import supplier) — spec §3.3.5.
+  taxReason       String?
   netAmount       Decimal               @db.Decimal(18, 2)
   vatAmount       Decimal               @db.Decimal(18, 2)
   receivedSqm     Decimal               @default(0) @db.Decimal(18, 4)
@@ -803,6 +805,8 @@ model SupplierInvoiceItem {
   unitPrice  Decimal           @db.Decimal(18, 4)
   taxCodeId  String
   taxCode    TaxCode           @relation(fields: [taxCodeId], references: [id])
+  /// Required when the code differs from the PO line's and is not the standard one (spec §3.3.5).
+  taxReason  String?
   netAmount  Decimal           @db.Decimal(18, 2)
   vatAmount  Decimal           @db.Decimal(18, 2)
   /// GRNI cleared at PO price.

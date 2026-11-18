@@ -445,3 +445,40 @@ describe("integration check (step 4)", () => {
     expect(r.difference.toString()).toBe("0");
   });
 });
+
+describe("tax code rule on purchase lines (T5-09, TD-022)", () => {
+  it("SR, and RC from an import supplier, need nothing; other codes need permission and a reason", async () => {
+    const acct = await ctxFor("accountant");
+    const local = await supplier("LOCAL");
+    const imp = await supplier("IMPORT");
+    const product = await makeProduct("SLAB");
+    const [sr, rc, os] = await Promise.all([tax("SR"), tax("RC"), tax("OS")]);
+    const po = (supplierId: string, taxCodeId: string, taxReason?: string) =>
+      savePurchaseOrder(acct, null, { supplierId, date: DATE, lines: [{ productId: product.id, sqm: "1", unitPrice: "10", taxCodeId, taxReason }] });
+
+    expect((await po(local.id, sr.id)).items[0].taxReason).toBeNull();
+    expect((await po(imp.id, rc.id)).items[0].taxReason).toBeNull();
+    await expect(po(local.id, rc.id)).rejects.toThrow(/reason/);
+    await expect(po(imp.id, os.id)).rejects.toThrow(/reason/);
+    const ok = await po(local.id, os.id, "Supplier is in a designated zone");
+    expect(ok.items[0].taxReason).toBe("Supplier is in a designated zone");
+
+    // Without the permission the reason does not help.
+    const noPerm = { ...acct, permissions: new Set([...acct.permissions].filter((p) => p !== "taxCode.change")) };
+    await expect(savePurchaseOrder(noPerm, null, { supplierId: local.id, date: DATE, lines: [{ productId: product.id, sqm: "1", unitPrice: "10", taxCodeId: os.id, taxReason: "x" }] })).rejects.toThrow(/Change tax code/);
+  });
+
+  it("an invoice line keeping its PO line's code needs no reason; changing it to a non-standard code does", async () => {
+    const { owner, acct, po, item } = await approvedPo("LOCAL");
+    await payInFull(acct, po.id);
+    await createGoodsReceipt(owner, { purchaseOrderId: po.id, warehouseId: await warehouseId(), date: DATE, lines: [{ poItemId: item.id, blocks: slabs(2) }] });
+    const zr = await tax("ZR");
+    const line = { poItemId: item.id, sqm: "4", unitPrice: "100" };
+    await expect(postSupplierInvoice(acct, { purchaseOrderId: po.id, supplierInvoiceNo: `INV-${uid()}`, date: DATE, lines: [{ ...line, taxCodeId: zr.id }] })).rejects.toThrow(/reason/);
+    const inv = await postSupplierInvoice(acct, { purchaseOrderId: po.id, supplierInvoiceNo: `INV-${uid()}`, date: DATE, lines: [{ ...line, sqm: "2", taxCodeId: item.taxCodeId }] });
+    const items = await prisma.supplierInvoiceItem.findMany({ where: { invoiceId: inv.id } });
+    expect(items[0].taxReason).toBeNull();
+    const inv2 = await postSupplierInvoice(acct, { purchaseOrderId: po.id, supplierInvoiceNo: `INV-${uid()}`, date: DATE, lines: [{ ...line, sqm: "2", taxCodeId: zr.id, taxReason: "Supplier credit for export stock" }] });
+    expect((await prisma.supplierInvoiceItem.findFirstOrThrow({ where: { invoiceId: inv2.id } })).taxReason).toBe("Supplier credit for export stock");
+  });
+});

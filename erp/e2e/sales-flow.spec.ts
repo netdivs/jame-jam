@@ -19,18 +19,24 @@ async function loginAs(page: Page, role: "owner" | "manager" | "accountant" | "s
 const shot = (page: Page, info: TestInfo, name: string) => page.screenshot({ path: info.outputPath(`${info.project.name}-${name}.png`), fullPage: true });
 const message = (page: Page, text: string) => page.locator('[role="status"], [role="alert"]').filter({ hasText: text }).first();
 
-/** Pick the first option of a stock select whose label contains `text`. */
+/** Pick the option of a stock select whose label contains `text` and shows the most SQM available
+ *  (earlier, interrupted runs may still hold reservations on the shared E2E database). */
 async function pickStock(page: Page, line: number, text: string) {
   const sel = page.getByLabel(`Line ${line} stock`);
   await expect(sel.locator("option", { hasText: text }).first()).toBeAttached();
-  const value = await sel.locator("option", { hasText: text }).first().getAttribute("value");
-  await sel.selectOption(value!);
+  const options = await sel.locator("option", { hasText: text }).evaluateAll((os) =>
+    os.map((o) => ({ value: (o as HTMLOptionElement).value, sqm: Number(/([\d,.]+) SQM/.exec(o.textContent ?? "")?.[1]?.replace(/,/g, "") ?? 0) })),
+  );
+  options.sort((a, b) => b.sqm - a.sqm);
+  await sel.selectOption(options[0].value);
 }
 
 test("sales order and proforma flow", async ({ page }, info) => {
   test.skip(!PASSWORD, "E2E_PASSWORD is not set");
   let soUrl = "";
   let piUrl = "";
+  let cancelled = false;
+  try {
 
   await test.step("storekeeper and accountant can view but not create sales orders", async () => {
     await loginAs(page, "accountant");
@@ -89,6 +95,27 @@ test("sales order and proforma flow", async ({ page }, info) => {
     await expect(page.getByText(/Quoted on proforma PI-/)).toBeVisible();
   });
 
+  await test.step("sales records an advance against the proforma; the accountant cancels it", async () => {
+    await page.goto(piUrl);
+    await page.getByRole("link", { name: "Record receipt" }).click();
+    await page.getByLabel("Amount (AED)").fill("1000");
+    await page.getByLabel("Reference").fill("TT-E2E");
+    await page.getByRole("button", { name: "Record receipt" }).click();
+    await expect(page).toHaveURL(/\/receipts\/(?!new$)[a-z0-9]+$/);
+    await expect(page.getByRole("heading", { name: /Bank receipt RV-/ })).toBeVisible();
+    await expect(page.getByText("Cancel this receipt")).toHaveCount(0); // sales cannot cancel
+    const receiptUrl = new URL(page.url()).pathname;
+    await page.goto(piUrl);
+    await expect(page.getByText("AED 1,000.00").first()).toBeVisible();
+    await shot(page, info, "03b-pi-with-receipt");
+    await loginAs(page, "accountant");
+    await page.goto(receiptUrl);
+    await page.getByLabel("Reason").fill("E2E clean-up");
+    await page.getByRole("button", { name: "Cancel receipt" }).click();
+    await expect(page.getByText("Cancelled", { exact: true }).first()).toBeVisible();
+    await loginAs(page, "sales");
+  });
+
   await test.step("manager closes the proforma, then sales edits the SO quantity", async () => {
     await loginAs(page, "manager");
     await page.goto(piUrl);
@@ -115,6 +142,7 @@ test("sales order and proforma flow", async ({ page }, info) => {
     await page.getByLabel("Reason").fill("E2E clean-up");
     await page.getByRole("button", { name: "Cancel SO and release stock" }).click();
     await expect(page.getByText("Cancelled: “E2E clean-up”")).toBeVisible();
+    cancelled = true;
     await expect(page.getByText("Cancelled").first()).toBeVisible();
     await expect(page.getByText(/Reserved \d/).locator("visible=true")).toHaveCount(0);
     await shot(page, info, "04-so-cancelled");
@@ -126,4 +154,16 @@ test("sales order and proforma flow", async ({ page }, info) => {
     await page.goto("/audit?entity=SalesOrder");
     await expect(page.getByText("cancel").first()).toBeVisible();
   });
+  } finally {
+    // Never leave stock reserved on the shared E2E database if a step failed.
+    if (soUrl && !cancelled) {
+      await loginAs(page, "manager");
+      await page.goto(soUrl);
+      const reason = page.getByLabel("Reason");
+      if (await reason.count()) {
+        await reason.fill("E2E clean-up after a failed step");
+        await page.getByRole("button", { name: "Cancel SO and release stock" }).click();
+      }
+    }
+  }
 });

@@ -12,9 +12,14 @@ const num = (s: string) => (/^\d+(\.\d+)?$/.test(s.trim()) ? Number(s) : NaN);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
 
-export function InvoiceForm({ poId, items, taxes, defaultDate }: { poId: string; items: Item[]; taxes: TaxOpt[]; defaultDate: string }) {
+export function InvoiceForm({ poId, items, taxes, defaultDate, importSupplier = false }: { poId: string; items: Item[]; taxes: TaxOpt[]; defaultDate: string; importSupplier?: boolean }) {
   const [head, setHead] = useState({ supplierInvoiceNo: "", date: defaultDate, dueDate: "", refCurrency: "", refAmount: "", refRate: "", notes: "" });
-  const [lines, setLines] = useState(() => items.map((i) => ({ ...i, include: true, sqm: i.openSqm, unitPrice: i.poPrice })));
+  const [lines, setLines] = useState(() => items.map((i) => ({ ...i, include: true, sqm: i.openSqm, unitPrice: i.poPrice, taxReason: "" })));
+  const poTax = new Map(items.map((i) => [i.id, i.taxCodeId]));
+  const needsReason = (l: { id: string; taxCodeId: string }) => {
+    const t = taxes.find((x) => x.value === l.taxCodeId);
+    return l.taxCodeId !== poTax.get(l.id) && !!t && !(t.type === "SR" || (t.type === "RC" && importSupplier));
+  };
   const set = (id: string, patch: Partial<(typeof lines)[number]>) => setLines((ls) => ls.map((l) => (l.id === id ? { ...l, ...patch } : l)));
 
   const chosen = lines.filter((l) => l.include);
@@ -33,7 +38,7 @@ export function InvoiceForm({ poId, items, taxes, defaultDate }: { poId: string;
   const payload = JSON.stringify({
     purchaseOrderId: poId,
     ...head,
-    lines: chosen.map((l) => ({ poItemId: l.id, sqm: l.sqm, unitPrice: l.unitPrice, taxCodeId: l.taxCodeId })),
+    lines: chosen.map((l) => ({ poItemId: l.id, sqm: l.sqm, unitPrice: l.unitPrice, taxCodeId: l.taxCodeId, taxReason: needsReason(l) ? l.taxReason : undefined })),
   });
 
   return (
@@ -106,6 +111,9 @@ export function InvoiceForm({ poId, items, taxes, defaultDate }: { poId: string;
                           </option>
                         ))}
                       </select>
+                      {l.include && needsReason(l) && (
+                        <input aria-label={`Line ${l.lineNo} tax code reason`} className={`${inputClass} mt-1`} required value={l.taxReason} onChange={(e) => set(l.id, { taxReason: e.target.value })} placeholder="Reason for this tax code *" />
+                      )}
                     </td>
                     <td className="num px-3 py-2 font-medium">{c ? money(c.net) : "—"}</td>
                   </tr>

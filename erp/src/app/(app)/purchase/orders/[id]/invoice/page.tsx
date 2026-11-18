@@ -41,6 +41,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         }))}
         taxes={taxes.map((t) => ({ value: t.id, label: `${t.code} — ${t.name}`, rate: Number(t.rate), type: t.type }))}
         defaultDate={todayIso()}
+        importSupplier={po.supplier.supplierType === "IMPORT"}
       />
     </>
   );

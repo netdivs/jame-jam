@@ -1,8 +1,8 @@
 "use client";
 // Purchase order editor. Totals are a preview; the server recalculates them.
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { ActionForm, SubmitButton } from "@/components/forms";
+import { ActionForm, SubmitButton, useFieldError } from "@/components/forms";
 import { Button, LinkButton, inputClass } from "@/components/ui";
 import { L } from "@/components/lot-editor";
 import { savePoAction } from "../actions";
@@ -10,7 +10,7 @@ import { savePoAction } from "../actions";
 type Opt = { value: string; label: string };
 type ProductOpt = Opt & { taxCodeId: string | null };
 type TaxOpt = Opt & { rate: number; type: string };
-type Line = { key: number; productId: string; description: string; sqm: string; unitPrice: string; taxCodeId: string };
+type Line = { key: number; productId: string; description: string; sqm: string; unitPrice: string; taxCodeId: string; taxReason?: string };
 export type PoFormValue = {
   supplierId: string;
   date: string;
@@ -23,6 +23,11 @@ export type PoFormValue = {
 };
 
 let seq = 1;
+
+function ReasonError({ i }: { i: number }) {
+  const e = useFieldError(`lines.${i}.taxReason`);
+  return e ? <p className="mt-1 text-xs text-danger">{e}</p> : null;
+}
 const num = (s: string) => (/^\d+(\.\d+)?$/.test(s.trim()) ? Number(s) : NaN);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
@@ -67,7 +72,7 @@ export function PoForm({
   const vat = calc.reduce((a, c) => a + c.vat, 0);
   const rc = calc.reduce((a, c) => a + c.rc, 0);
 
-  const payload = JSON.stringify({ ...head, lines: lines.map(({ key: _k, ...l }) => l) });
+  const payload = JSON.stringify({ ...head, lines: lines.map(({ key: _k, ...l }) => ({ ...l, taxReason: l.taxReason || undefined })) });
 
   return (
     <ActionForm action={savePoAction.bind(null, id)} className="space-y-5">
@@ -122,8 +127,12 @@ export function PoForm({
               </tr>
             </thead>
             <tbody>
-              {lines.map((l, i) => (
-                <tr key={l.key} className="border-t border-border align-top">
+              {lines.map((l, i) => {
+                const lineTax = taxes.find((t) => t.value === l.taxCodeId);
+                const nonStandard = lineTax && !(lineTax.type === "SR" || (lineTax.type === "RC" && supplier?.type === "IMPORT"));
+                return (
+                <Fragment key={l.key}>
+                <tr className="border-t border-border align-top">
                   <td className="px-3 py-2 text-muted">{i + 1}</td>
                   <td className="px-3 py-1.5">
                     <select
@@ -168,7 +177,19 @@ export function PoForm({
                     </Button>
                   </td>
                 </tr>
-              ))}
+                {nonStandard && (
+                  <tr>
+                    <td />
+                    <td colSpan={7} className="px-3 pb-2">
+                      <label htmlFor={`tr${l.key}`} className="mb-1 block text-xs font-medium">{`Reason for tax code ${lineTax.label.split(" ")[0]} *`}</label>
+                      <input id={`tr${l.key}`} aria-label={`Line ${i + 1} tax code reason`} className={inputClass} value={l.taxReason ?? ""} onChange={(e) => setLine(l.key, { taxReason: e.target.value })} placeholder="e.g. Supplier is outside the UAE VAT scope" />
+                      <ReasonError i={i} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

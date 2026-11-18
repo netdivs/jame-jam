@@ -6,6 +6,7 @@ import type { PoStatus, Prisma, ShipmentStatus } from "@prisma/client";
 import { z } from "zod";
 import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, inTx, nextDocNumber, round2, round4, sum, toDateOnly } from "../core";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
+import { isStandardPurchaseCode, requireTaxReason } from "../tax-rules";
 
 // ───────────────────────────── Shared helpers ─────────────────────────────
 
@@ -68,6 +69,8 @@ const lineSchema = z.object({
   sqm: decimal({ gt: 0, dp: 4, label: "SQM" }),
   unitPrice: decimal({ min: 0, dp: 4, label: "Unit price" }),
   taxCodeId: reqText("Tax code"),
+  /** Needed when the tax code is not the standard one (spec §3.3.5). */
+  taxReason: optText(500),
 });
 
 export const poSchema = z.object({
@@ -82,7 +85,7 @@ export const poSchema = z.object({
 });
 export type PoInput = z.input<typeof poSchema>;
 
-async function buildLines(tx: Tx, lines: z.output<typeof lineSchema>[]) {
+async function buildLines(tx: Tx, ctx: Ctx, supplierType: string, lines: z.output<typeof lineSchema>[]) {
   const products = await tx.product.findMany({ where: { id: { in: lines.map((l) => l.productId) } } });
   const taxes = await tx.taxCode.findMany({ where: { id: { in: lines.map((l) => l.taxCodeId) } } });
   const pById = new Map(products.map((p) => [p.id, p]));
@@ -92,6 +95,7 @@ async function buildLines(tx: Tx, lines: z.output<typeof lineSchema>[]) {
     if (!p || !p.active) throw new AppError("VALIDATION", `Line ${i + 1}: select an active product`);
     const t = tById.get(l.taxCodeId);
     if (!t || !t.active) throw new AppError("VALIDATION", `Line ${i + 1}: select an active tax code`);
+    const taxReason = isStandardPurchaseCode(t.type, supplierType) ? null : requireTaxReason(ctx, { line: i + 1, code: t.code, reason: l.taxReason, field: `lines.${i}.taxReason` });
     const sqm = round4(l.sqm);
     const unitPrice = round4(l.unitPrice);
     const a = lineAmounts(sqm, unitPrice, t);
@@ -102,6 +106,7 @@ async function buildLines(tx: Tx, lines: z.output<typeof lineSchema>[]) {
       sqm,
       unitPrice,
       taxCodeId: t.id,
+      taxReason,
       netAmount: a.net,
       vatAmount: a.vat.plus(a.rcVat),
       _vat: a.vat,
@@ -118,7 +123,7 @@ export async function savePurchaseOrder(ctx: Ctx, id: string | null, raw: unknow
   return inTx(async (tx) => {
     const supplier = await tx.supplier.findUnique({ where: { id: input.supplierId } });
     if (!supplier || !supplier.active) throw new AppError("VALIDATION", "Select an active supplier");
-    const lines = await buildLines(tx, input.lines);
+    const lines = await buildLines(tx, ctx, supplier.supplierType, input.lines);
     const totals = {
       netTotal: sum(lines.map((l) => l.netAmount)),
       vatTotal: sum(lines.map((l) => l._vat)),

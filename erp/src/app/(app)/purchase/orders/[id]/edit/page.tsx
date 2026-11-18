@@ -32,6 +32,7 @@ export default async function EditPoPage({ params }: { params: Promise<{ id: str
             sqm: i.sqm.toString(),
             unitPrice: i.unitPrice.toString(),
             taxCodeId: i.taxCodeId,
+            taxReason: i.taxReason ?? "",
           })),
         }}
         {...opts}
