@@ -366,6 +366,10 @@ Login rate limit, `loginFailed`/`logout` audit, IP on audit rows, security heade
 
 User page → "Permission overrides". Vitest 113/113; Playwright 26/26.
 
+## 6n. Demo business data (T4-12, T11-03 partial — 19 Nov 2026)
+
+`seedDemoBusiness` (`erp/src/server/demo-business.ts`) runs from the development/demo seed only; production uses `npm run db:seed:base`. Verified on a fresh test DB (all reconciliations) and on the local dev DB through `npx prisma db seed`.
+
 ## 7. Deployment
 
 - **Server:** the aaPanel host (SSH alias `aapanel`). Code is at `/www/wwwroot/jame.netdivs.us`.

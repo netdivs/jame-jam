@@ -24,7 +24,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T4-10 | Workflow verification (no-JS HTTP walkthrough of the real forms, 5 roles) | High | T4-09 | DONE | C | 78/78 checks incl. reconciliation | — |
 | T4-17 | Frontend review by Kilo (read-only, delegated as T4-REVIEW-UI): 8 findings, 0 high; applied #1, #2, #4, #5 (override form a11y, basis formatting); #3 invalid (Decimal prints no trailing zeros); #6–#8 match existing app-wide patterns, kept as design-system notes | Low | T4-03 | DONE | K → C | Findings triaged; walkthrough still 78/78 | build, HTTP |
 | T4-11 | Browser run-through on a desktop and a phone | High | T4-10 | DONE | C | Playwright (Chromium) ran the full flow with JavaScript as 5 roles on Desktop Chrome 1366×800 and Pixel 7, both passing; screenshots reviewed; 3 layout issues fixed (mobile allocation preview columns, override form width, form messages in grids). The owner may still want a personal look before the demo | E2E |
-| T4-12 | Demo data: one import PO through every status, all 10 landed cost categories, local PO | Med | T4-09 | PLANNED | O / C | Idempotent seed step; skipped when purchase data exists | H |
+| T4-12 | Demo data: one import PO through every status, all 10 landed cost categories, local PO | Med | T4-09 | DONE (19 Nov 2026, `seedDemoBusiness`) | O / C | Idempotent seed step; skipped when purchase data exists | H |
 | T4-13 | Production deployment of Step 4 — **deferred: one release after all steps are done (user, 18 Nov 2026)** | High | all steps, user approval | DEFERRED | C + user | Backup verified; migration applied; base seed re-run; smoke test passes | smoke |
 | T4-14 | Client confirmation of C1, C5, C6, Q10 | High | — | BLOCKED (client) | user | Answers recorded in DECISIONS.md | — |
 | T4-15 | Leftover supplier advance (invoice < paid) — refund or offset path (F5) | Med | T8-03 | DONE (18 Nov 2026; closed POs only, TD-027) | O | Advance can be refunded (PV refund) or applied to another PO of the same supplier | H R P G A |
@@ -94,7 +94,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 |---|---|---|---|---|---|---|---|
 | T11-01 | Opening AR/AP (invoice-wise), bank/cash/PDC balances, opening trial balance | High | T8-01, T8-03 | DONE (19 Nov 2026, TD-033; bulk Excel import is T11-02) | O | R8 | H G |
 | T11-02 | Excel import templates with validation, error report and dry run | Med | TX-02 | PLANNED | O | — | H R |
-| T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | PLANNED | O | Demo runs complete workflows | H |
+| T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | PARTIAL (19 Nov 2026): purchases, landed costs, SOs/PIs (active/expired/renewed), receipts, PDCs (pending/cleared/bounced/replaced, issued), petty cash, bank statement lines, CRM. Tax invoices, DNs, credit notes and a VAT period wait for C4/C7 | O | Demo runs complete workflows | H |
 | T11-04 | Mobile dashboard (spec §6) | Med | Steps 5–6 | PLANNED | K | — | E2E |
 | T11-05 | PDF documents (PO, GRN, SO, PI, TI, DN, CN, CR, RV, PV, PDC, statements) | High | TX-01 | PLANNED | O/K | Snapshot company details | H |
 | T11-06 | UAT, client demo, production readiness sign-off | High | all | PLANNED | user | [production-readiness.md](docs/engineering/production-readiness.md) all green | — |
