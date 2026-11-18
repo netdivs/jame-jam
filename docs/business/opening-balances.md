@@ -2,7 +2,7 @@
 
 Purpose: start the system fresh with masters, opening stock (full Lot → Block → Slab with cost), open customer/supplier items, bank/cash/PDC balances and an opening trial balance — no historical migration.
 
-**Implementation status:** Partial. Opening stock Done (Step 3). Opening AR/AP, bank/cash/PDC, trial balance and Excel import templates Planned (Step 11).
+**Implementation status:** Opening stock Done (Step 3). Opening AR/AP invoice-wise, advances, cash/bank/petty cash, open PDCs (through the PDC register) and the opening trial balance Done (T11-01, 19 Nov 2026, TD-033): `erp/src/server/accounting/opening.ts`, `/accounts/opening`. Excel import templates Planned (T11-02).
 
 ## 1. Business purpose
 
@@ -71,9 +71,9 @@ Audited: `create` on `Lot` (lot no., product, total SQM, total value, blocks) an
 |---|---|---|
 | Opening stock entry (lot/block/slab, tiles) | Done | `/inventory/lots/new`, `createOpeningLot`, `components/lot-editor.tsx` |
 | Demo data seeding | Partial | `seedDemoInventory` (`demo.ts`): demo products, suppliers, customers, opening lots and a slab split only (skipped when lots already exist); spec §10 demo data for sales, PDC, CRM etc. Planned |
-| Opening AR/AP invoice-wise | Planned (Step 11) | — |
-| Opening bank/cash/PDC | Planned (Step 11) | — |
-| Opening trial balance | Planned (Step 11) | — |
+| Opening AR/AP invoice-wise, with knock-off | Done (T11-01) | `/accounts/opening`, `opening.ts`; tests `erp/tests/opening.test.ts` |
+| Opening bank/cash/petty cash; open PDCs | Done (T11-01) | cash/bank items; PDCs via `/pdc/new` dated on the opening date |
+| Opening trial balance | Done (T11-01) | `/accounts/opening/trial-balance` |
 | Excel import templates with dry-run and error report | Planned (Step 11) | — |
 
 ## 12. Known gaps

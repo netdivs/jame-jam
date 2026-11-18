@@ -40,7 +40,7 @@ test("ledgers: control check, customer statement after a receipt, supplier list"
     await expect(page.getByText(/customers = Customer Advances ✓/)).toBeVisible();
     await page.getByRole("link", { name: "Palm Coast Villas (demo)" }).click();
     await expect(page.getByRole("heading", { name: /Statement — Palm Coast Villas/ })).toBeVisible();
-    await expect(page.getByText("Opening balance")).toBeVisible();
+    await expect(page.getByText("Opening balance", { exact: true })).toBeVisible();
     await expect(page.getByText("123.45").locator("visible=true").first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Print / save as PDF" })).toBeVisible();
     await shot(page, info, "01-statement");

@@ -102,6 +102,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             ]
           : []),
         ...(has("accounts.view") ? [{ href: "/accounts/periods", label: "Periods", icon: "periods" as const }] : []),
+        ...(has("accounts.view") ? [{ href: "/accounts/opening", label: "Opening balances", icon: "opening" as const }] : []),
       ],
     },
     {

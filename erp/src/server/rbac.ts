@@ -57,6 +57,7 @@ export const PERMISSIONS = {
   "pettyCash.view": "View petty cash boxes, transactions and the daily cash report",
   "pettyCash.manage": "Record petty cash top-ups and expenses, cancel them, and manage boxes and expense categories",
   "bankRec.manage": "Enter and import bank statements, match them, post bank charges and save reconciliations",
+  "opening.manage": "Enter opening balances (open invoices, advances, cash/bank, opening trial balance) and knock off opening invoices",
   // CRM (spec §3.6; "own" = records assigned to / owned by the user)
   "crm.view": "View own CRM leads, opportunities, follow-ups and customer timelines",
   "crm.viewAll": "View every user's CRM records and CRM reports",
@@ -81,7 +82,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     description: "Runs operations; approves returns and POs",
     // Spec §5: Manager only views payments, receipts, bank and journals.
     permissions: ALL.filter(
-      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage", "refunds.create", "refunds.cancel", "pettyCash.manage", "bankRec.manage"].includes(p),
+      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage", "refunds.create", "refunds.cancel", "pettyCash.manage", "bankRec.manage", "opening.manage"].includes(p),
     ),
   },
   {
@@ -119,6 +120,7 @@ export const ROLES: { key: string; name: string; description: string; permission
       "pettyCash.view",
       "pettyCash.manage",
       "bankRec.manage",
+      "opening.manage",
       "crm.view",
       "crm.viewAll",
     ],

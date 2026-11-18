@@ -20,6 +20,12 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — opening balances (T11-01; not deployed)
+- `/accounts/opening`: opening customer and supplier invoices (invoice-wise), customer/supplier advances, cash/bank/petty cash balances, each posted against Opening Balance Equity; summary with Opening Balance Equity, stock = GL and parties = AR/AP checks.
+- Knock-off: apply a customer's free advance to an opening invoice; pay an opening supplier invoice by PV or by post-dated cheque.
+- `/accounts/opening/trial-balance`: the remaining accounts in one entry, difference to Opening Balance Equity.
+- Permission `opening.manage`. Migration `opening_balances` (additive). TD-033. Tests: 4 (111 in total); Playwright opening flow (24 in total). The accounts E2E now renames an earlier test bank after a few runs instead of exhausting bank ledger codes.
+
 ### Added — production base seed (TS-04)
 - `npm run db:seed:base`: base data only (no demo users or stock), no password printed, password (≥ 12 chars) needed only to create the first owner; on an existing install no user is created or changed. Role permissions are reset in one transaction per role. Tests: 3 (107 in total).
 

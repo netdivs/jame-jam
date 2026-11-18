@@ -8,11 +8,14 @@ import { postJournal } from "../accounting/gl";
 import { cashAccountFor } from "../accounting/banks";
 import { dateStr, decimal, optText, parse } from "../validation";
 import { LIVE, lockPo, paymentStatusOf } from "./orders";
+import { lockOpeningPayable, settleOpeningInvoice } from "../accounting/opening";
 
 export const paymentSchema = z
   .object({
     purchaseOrderId: optText(),
     landedCostExpenseId: optText(),
+    /** An opening supplier invoice (T11-01). */
+    openingItemId: optText(),
     date: dateStr,
     amount: decimal({ gt: 0, dp: 2, label: "Amount" }),
     mode: z.enum(["CASH", "BANK"], { errorMap: () => ({ message: "Choose cash or bank" }) }),
@@ -21,7 +24,7 @@ export const paymentSchema = z
     reference: optText(80),
     notes: optText(500),
   })
-  .refine((v) => Boolean(v.purchaseOrderId) !== Boolean(v.landedCostExpenseId), "A payment is for one PO or one landed cost bill");
+  .refine((v) => [v.purchaseOrderId, v.landedCostExpenseId, v.openingItemId].filter(Boolean).length === 1, "A payment is for one PO, one landed cost bill or one opening invoice");
 
 /** Settle posted, unpaid supplier invoices of a PO (oldest first). Returns the amount used. */
 export async function settlePoInvoices(tx: Tx, poId: string, available: Dec): Promise<Dec> {
@@ -111,6 +114,30 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
         ],
       });
       await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, po: po.number, amount, toAdvance, toPayable } });
+      return pv;
+    }
+
+    if (input.openingItemId) {
+      const { item, open } = await lockOpeningPayable(tx, input.openingItemId);
+      if (date < item.date) throw new AppError("VALIDATION", "The payment cannot be dated before the opening balance");
+      if (amount.gt(open)) {
+        throw new AppError("VALIDATION", `Opening invoice ${item.refNo} can be paid at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
+      }
+      await settleOpeningInvoice(tx, item.id, amount);
+      const pv = await tx.supplierPayment.create({
+        data: { number, supplierId: item.supplierId!, openingItemId: item.id, date, amount, mode: input.mode, bankAccountId: cash.bankAccountId, reference: input.reference, notes: input.notes, toPayable: amount, createdById: ctx.userId },
+      });
+      await postJournal(tx, ctx, {
+        date,
+        sourceType: "SUPPLIER_PAYMENT",
+        sourceId: pv.id,
+        memo: `${number} — ${item.supplier!.name} — opening invoice ${item.refNo}`,
+        lines: [
+          { account: "AP", debit: amount, partyType: "SUPPLIER", partyId: item.supplierId! },
+          { account: cash.account, credit: amount },
+        ],
+      });
+      await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, openingInvoice: item.refNo, amount } });
       return pv;
     }
 

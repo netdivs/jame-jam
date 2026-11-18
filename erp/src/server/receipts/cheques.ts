@@ -21,6 +21,7 @@ import { assertPiUsable } from "../sales/proformas";
 import { LIVE, lockPo, paymentStatusOf } from "../purchase/orders";
 import { settlePoInvoices } from "../purchase/payments";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
+import { lockOpeningPayable, settleOpeningInvoice } from "../accounting/opening";
 
 export const OPEN_RECEIVED: ChequeStatus[] = ["RECEIVED", "DEPOSITED"];
 
@@ -34,7 +35,9 @@ const baseSchema = {
   remarks: optText(500),
 };
 export const receivedSchema = z.object({ ...baseSchema, customerId: optText(40), proformaInvoiceId: optText(40) });
-export const issuedSchema = z.object({ ...baseSchema, purchaseOrderId: reqText("Purchase order"), bankAccountId: optText(40) });
+export const issuedSchema = z
+  .object({ ...baseSchema, purchaseOrderId: optText(40), openingItemId: optText(40), bankAccountId: optText(40) })
+  .refine((v) => Boolean(v.purchaseOrderId) !== Boolean(v.openingItemId), { message: "Choose the purchase order (or the opening supplier invoice) this cheque pays", path: ["purchaseOrderId"] });
 
 async function lockCheque(tx: Tx, id: string) {
   const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Cheque" WHERE "id" = ${id} FOR UPDATE`;
@@ -123,13 +126,22 @@ export async function recordIssuedCheque(ctx: Ctx, raw: unknown) {
   const { issueDate, dueDate } = dates(input.issueDate, input.dueDate);
   const amount = round2(input.amount);
   return inTx(async (tx) => {
-    const po = await lockPo(tx, input.purchaseOrderId);
-    if (!LIVE.includes(po.status)) throw new AppError("VALIDATION", `PO ${po.number} must be approved before it can be paid`);
-    const invoiced = D((await tx.supplierInvoice.aggregate({ where: { purchaseOrderId: po.id }, _sum: { total: true } }))._sum.total ?? 0);
-    const cap = D(po.total).gt(invoiced) ? D(po.total) : invoiced;
-    const pending = D((await tx.cheque.aggregate({ where: { purchaseOrderId: po.id, status: "ISSUED" }, _sum: { amount: true } }))._sum.amount ?? 0);
-    const open = cap.minus(po.paidAmount).minus(pending);
-    if (amount.gt(open)) throw new AppError("VALIDATION", `PO ${po.number} can take at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
+    // Against a PO, or against an opening supplier invoice (T11-01).
+    let target: { supplierId: string; supplierName: string; poId: string | null; openingItemId: string | null; label: string };
+    if (input.purchaseOrderId) {
+      const po = await lockPo(tx, input.purchaseOrderId);
+      if (!LIVE.includes(po.status)) throw new AppError("VALIDATION", `PO ${po.number} must be approved before it can be paid`);
+      const invoiced = D((await tx.supplierInvoice.aggregate({ where: { purchaseOrderId: po.id }, _sum: { total: true } }))._sum.total ?? 0);
+      const cap = D(po.total).gt(invoiced) ? D(po.total) : invoiced;
+      const pending = D((await tx.cheque.aggregate({ where: { purchaseOrderId: po.id, status: "ISSUED" }, _sum: { amount: true } }))._sum.amount ?? 0);
+      const open = cap.minus(po.paidAmount).minus(pending);
+      if (amount.gt(open)) throw new AppError("VALIDATION", `PO ${po.number} can take at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
+      target = { supplierId: po.supplierId, supplierName: po.supplier.name, poId: po.id, openingItemId: null, label: `PO ${po.number}` };
+    } else {
+      const { item, open } = await lockOpeningPayable(tx, input.openingItemId!);
+      if (amount.gt(open)) throw new AppError("VALIDATION", `Opening invoice ${item.refNo} can take at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
+      target = { supplierId: item.supplierId!, supplierName: item.supplier!.name, poId: null, openingItemId: item.id, label: `opening invoice ${item.refNo}` };
+    }
     const bank = await cashAccountFor(tx, "BANK", input.bankAccountId);
     const bankRow = await tx.bankAccount.findUniqueOrThrow({ where: { id: bank.bankAccountId! } });
 
@@ -144,8 +156,9 @@ export async function recordIssuedCheque(ctx: Ctx, raw: unknown) {
         amount,
         issueDate,
         dueDate,
-        supplierId: po.supplierId,
-        purchaseOrderId: po.id,
+        supplierId: target.supplierId,
+        purchaseOrderId: target.poId,
+        openingItemId: target.openingItemId,
         bankAccountId: bankRow.id,
         status: "ISSUED",
         remarks: input.remarks ?? null,
@@ -157,13 +170,13 @@ export async function recordIssuedCheque(ctx: Ctx, raw: unknown) {
       date: issueDate,
       sourceType: "PDC_ISSUED",
       sourceId: cheque.id,
-      memo: `${number} — cheque ${input.chequeNo} to ${po.supplier.name} for PO ${po.number}, due ${input.dueDate}`,
+      memo: `${number} — cheque ${input.chequeNo} to ${target.supplierName} for ${target.label}, due ${input.dueDate}`,
       lines: [
-        { account: "SUPPLIER_ADVANCES", debit: amount, partyType: "SUPPLIER", partyId: po.supplierId },
+        { account: "SUPPLIER_ADVANCES", debit: amount, partyType: "SUPPLIER", partyId: target.supplierId },
         { account: "PDC_PAYABLE", credit: amount },
       ],
     });
-    await audit(tx, ctx, { action: "create", entity: "Cheque", entityId: cheque.id, after: { number, direction: "ISSUED", chequeNo: input.chequeNo, amount, dueDate, po: po.number } });
+    await audit(tx, ctx, { action: "create", entity: "Cheque", entityId: cheque.id, after: { number, direction: "ISSUED", chequeNo: input.chequeNo, amount, dueDate, for: target.label } });
     return cheque;
   });
 }
@@ -212,6 +225,7 @@ export async function changeChequeStatus(ctx: Ctx, id: string, raw: unknown) {
     const c0 = await tx.cheque.findUnique({ where: { id } });
     if (!c0) throw new AppError("NOT_FOUND", "Cheque not found");
     if (c0.purchaseOrderId) await lockPo(tx, c0.purchaseOrderId);
+    if (c0.openingItemId) await tx.$queryRaw`SELECT "id" FROM "OpeningItem" WHERE "id" = ${c0.openingItemId} FOR UPDATE`;
     if (c0.proformaInvoiceId) await tx.$queryRaw`SELECT "id" FROM "ProformaInvoice" WHERE "id" = ${c0.proformaInvoiceId} FOR UPDATE`;
     const c = await lockCheque(tx, id);
     const allowed = ALLOWED[c.direction][input.action] ?? [];
@@ -249,6 +263,23 @@ export async function changeChequeStatus(ctx: Ctx, id: string, raw: unknown) {
           const pi = await tx.proformaInvoice.findUniqueOrThrow({ where: { id: c.proformaInvoiceId } });
           await tx.proformaInvoice.update({ where: { id: pi.id }, data: { receivedAmount: D(pi.receivedAmount).plus(amount) } });
         }
+      } else if (c.openingItemId) {
+        // Opening supplier invoice: the AP is knocked off from the advance the cheque created.
+        const item = await tx.openingItem.findUniqueOrThrow({ where: { id: c.openingItemId } });
+        await settleOpeningInvoice(tx, item.id, amount);
+        const party = { partyType: "SUPPLIER" as const, partyId: c.supplierId! };
+        await postJournal(tx, ctx, {
+          date,
+          sourceType: "PDC_CLEARED",
+          sourceId: c.id,
+          memo: `${c.number} — cheque ${c.chequeNo} to ${c.supplier?.name ?? ""} cleared (opening invoice ${item.refNo})`,
+          lines: [
+            { account: "PDC_PAYABLE", debit: amount },
+            { account: bank.account, credit: amount },
+            { account: "AP", debit: amount, ...party },
+            { account: "SUPPLIER_ADVANCES", credit: amount, ...party },
+          ],
+        });
       } else {
         const po = await tx.purchaseOrder.findUniqueOrThrow({ where: { id: c.purchaseOrderId! } });
         const toPayable = await settlePoInvoices(tx, po.id, amount);

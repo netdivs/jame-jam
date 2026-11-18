@@ -194,6 +194,7 @@ model Account {
   bank              BankAccount?
   pettyCash         PettyCashAccount?
   expenseCategories ExpenseCategory[]
+  openingItems      OpeningItem[]
 }
 
 /// A company bank account (spec §3.4, T8-03). Each one has its own GL account under Cash & Bank.
@@ -344,6 +345,7 @@ model Customer {
   opportunities    Opportunity[]
   interactions     CrmInteraction[]
   followUps        CrmFollowUp[]
+  openingItems     OpeningItem[]
 }
 
 enum SupplierType {
@@ -373,6 +375,7 @@ model Supplier {
   cheques       Cheque[]
   refunds       Refund[]
   advanceMoves  SupplierAdvanceTransfer[]
+  openingItems  OpeningItem[]
 }
 
 enum ProductType {
@@ -876,6 +879,9 @@ model SupplierPayment {
   purchaseOrder       PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
   landedCostExpenseId String?
   landedCostExpense   LandedCostExpense? @relation(fields: [landedCostExpenseId], references: [id])
+  /// Payment of an opening supplier invoice (T11-01).
+  openingItemId       String?
+  openingItem         OpeningItem?       @relation(fields: [openingItemId], references: [id])
   date                DateTime           @db.Date
   amount              Decimal            @db.Decimal(18, 2)
   mode                PaymentMode
@@ -1216,6 +1222,9 @@ model Cheque {
   proformaInvoice   ProformaInvoice?    @relation(fields: [proformaInvoiceId], references: [id])
   purchaseOrderId   String?
   purchaseOrder     PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  /// Issued against an opening supplier invoice (T11-01) instead of a PO.
+  openingItemId     String?
+  openingItem       OpeningItem?        @relation(fields: [openingItemId], references: [id])
   /// Received: the bank it was deposited into. Issued: the bank it is drawn on.
   bankAccountId     String?
   bankAccount       BankAccount?        @relation(fields: [bankAccountId], references: [id])
@@ -1608,4 +1617,72 @@ model CrmFollowUp {
   @@index([customerId])
   @@index([leadId])
   @@index([opportunityId])
+}
+
+// ───────────────────────────── Opening balances (T11-01) ─────────────────────────────
+
+enum OpeningKind {
+  CUSTOMER_INVOICE
+  SUPPLIER_INVOICE
+  CUSTOMER_ADVANCE
+  SUPPLIER_ADVANCE
+  CASH_BANK
+}
+
+enum OpeningStatus {
+  OPEN
+  SETTLED
+  CANCELLED
+}
+
+/// One go-live balance (spec §3.4.7), posted against Opening Balance Equity (TD-033).
+/// Invoices are kept one by one so receipts and payments can knock them off.
+model OpeningItem {
+  id            String              @id @default(cuid())
+  /// OB-YYNNNN
+  number        String              @unique
+  kind          OpeningKind
+  /// The "as at" date of the opening balance (posting date).
+  date          DateTime            @db.Date
+  customerId    String?
+  customer      Customer?           @relation(fields: [customerId], references: [id])
+  supplierId    String?
+  supplier      Supplier?           @relation(fields: [supplierId], references: [id])
+  /// CASH_BANK: the cash, bank or petty cash ledger account.
+  accountId     String?
+  account       Account?            @relation(fields: [accountId], references: [id])
+  /// Invoices: the party's invoice number, its date and due date.
+  refNo         String?
+  docDate       DateTime?           @db.Date
+  dueDate       DateTime?           @db.Date
+  /// Invoices and advances: > 0. CASH_BANK: may be < 0 (bank overdraft).
+  amount        Decimal             @db.Decimal(18, 2)
+  /// Invoices: the part already knocked off.
+  settledAmount Decimal             @default(0) @db.Decimal(18, 2)
+  status        OpeningStatus       @default(OPEN)
+  notes         String?
+  cancelReason  String?
+  cancelledAt   DateTime?
+  createdById   String?
+  createdAt     DateTime            @default(now())
+  allocations   OpeningAllocation[]
+  payments      SupplierPayment[]
+  cheques       Cheque[]
+
+  @@unique([kind, customerId, refNo])
+  @@unique([kind, supplierId, refNo])
+  @@index([kind, status])
+}
+
+/// A customer's free advance applied to an opening customer invoice (Dr Customer Advances, Cr AR).
+model OpeningAllocation {
+  id            String      @id @default(cuid())
+  openingItemId String
+  openingItem   OpeningItem @relation(fields: [openingItemId], references: [id])
+  date          DateTime    @db.Date
+  amount        Decimal     @db.Decimal(18, 2)
+  createdById   String?
+  createdAt     DateTime    @default(now())
+
+  @@index([openingItemId])
 }

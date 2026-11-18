@@ -92,7 +92,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T11-01 | Opening AR/AP (invoice-wise), bank/cash/PDC balances, opening trial balance | High | T8-01, T8-03 | PLANNED | O | R8 | H G |
+| T11-01 | Opening AR/AP (invoice-wise), bank/cash/PDC balances, opening trial balance | High | T8-01, T8-03 | DONE (19 Nov 2026, TD-033; bulk Excel import is T11-02) | O | R8 | H G |
 | T11-02 | Excel import templates with validation, error report and dry run | Med | TX-02 | PLANNED | O | — | H R |
 | T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | PLANNED | O | Demo runs complete workflows | H |
 | T11-04 | Mobile dashboard (spec §6) | Med | Steps 5–6 | PLANNED | K | — | E2E |

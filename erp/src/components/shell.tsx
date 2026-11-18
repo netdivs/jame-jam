@@ -44,6 +44,7 @@ import {
   BellRing,
   UserPlus,
   Target,
+  Flag,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -87,6 +88,7 @@ const ICONS = {
   followUps: BellRing,
   leads: UserPlus,
   opportunities: Target,
+  opening: Flag,
 };
 
 function ThemeToggle() {

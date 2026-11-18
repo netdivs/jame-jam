@@ -22,14 +22,22 @@ test("bank account, journal voucher, reports and jobs", async ({ page }, info) =
   const tag = `${TAG}${info.project.name === "mobile" ? "M" : "D"}`;
   const bank = `ENBD ${tag}`;
 
-  await test.step("accountant adds a bank account", async () => {
+  await test.step("accountant adds a bank account (or renames an earlier E2E one)", async () => {
     await loginAs(page, "accountant");
     await page.goto("/accounts/banks");
+    // Each bank takes one of 69 ledger codes (1131–1199). On the shared E2E database, after a few runs we rename an
+    // earlier test bank instead of adding another, so repeated runs never exhaust the codes.
+    const earlier = page.getByRole("link", { name: /^ENBD [0-9A-Z]+[MD]$/ });
+    const reuse = (await earlier.count()) >= 4;
+    if (reuse) {
+      await earlier.first().click();
+      await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+    }
     await page.getByLabel("Name").fill(bank);
     await page.getByLabel("Bank", { exact: true }).fill("Emirates NBD");
     await page.getByLabel("IBAN").fill("AE07 0331 2345 6789 0123 456");
-    await page.getByRole("button", { name: "Add bank account" }).click();
-    await expect(message(page, "added")).toBeVisible();
+    await page.getByRole("button", { name: reuse ? "Save changes" : "Add bank account" }).click();
+    await expect(message(page, reuse ? "saved" : "added")).toBeVisible();
     await expect(page.getByRole("link", { name: bank })).toBeVisible();
     await shot(page, info, "01-banks");
   });
