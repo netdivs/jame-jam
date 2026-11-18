@@ -8,7 +8,7 @@ import { recordChequeAction } from "../actions";
 
 export const metadata = { title: "Record cheque" };
 
-export default async function NewChequePage({ searchParams }: { searchParams: Promise<{ direction?: string; pi?: string; po?: string; opening?: string }> }) {
+export default async function NewChequePage({ searchParams }: { searchParams: Promise<{ direction?: string; pi?: string; po?: string; opening?: string; bill?: string }> }) {
   const sp = await searchParams;
   const issued = sp.direction === "ISSUED";
   await requirePermission(issued ? "payments.supplier" : "receipts.create");
@@ -21,6 +21,8 @@ export default async function NewChequePage({ searchParams }: { searchParams: Pr
   const openPos = pos.filter((p) => D(p.paidAmount).lt(p.total));
   // Issued against an opening supplier invoice (T11-01) instead of a PO.
   const opening = issued && sp.opening ? await prisma.openingItem.findUnique({ where: { id: sp.opening }, include: { supplier: true } }) : null;
+  // Or against a landed cost bill (freight, customs, …).
+  const bill = issued && sp.bill ? await prisma.landedCostExpense.findUnique({ where: { id: sp.bill }, include: { supplier: true } }) : null;
 
   return (
     <>
@@ -29,6 +31,11 @@ export default async function NewChequePage({ searchParams }: { searchParams: Pr
         subtitle={issued ? "The PO counts it as paid only when it clears." : "Held as a customer advance; it counts as payment only when it clears."}
         back={{ href: "/pdc", label: "Post-dated cheques" }}
       />
+      {bill && (
+        <Card title={`For bill ${bill.billNo}`} className="mb-5">
+          <DefList items={[["Supplier", bill.supplier.name], ["Bill total", fmtAED(bill.total)], ["Already paid", fmtAED(bill.paidAmount)]]} />
+        </Card>
+      )}
       {opening && (
         <Card title={`For opening invoice ${opening.refNo}`} className="mb-5">
           <DefList items={[["Supplier", opening.supplier?.name ?? ""], ["Invoice", fmtAED(opening.amount)], ["Already paid", fmtAED(opening.settledAmount)]]} />
@@ -43,7 +50,9 @@ export default async function NewChequePage({ searchParams }: { searchParams: Pr
         <ActionForm action={recordChequeAction.bind(null, issued ? "ISSUED" : "RECEIVED")} className="grid gap-4 sm:grid-cols-2">
           {issued ? (
             <>
-              {opening ? (
+              {bill ? (
+                <input type="hidden" name="landedCostExpenseId" value={bill.id} />
+              ) : opening ? (
                 <input type="hidden" name="openingItemId" value={opening.id} />
               ) : (
               <div className="sm:col-span-2">

@@ -290,6 +290,7 @@ export default async function LandedCostDetail({ params }: { params: Promise<{ i
                 <SubmitButton variant="secondary">Record payment</SubmitButton>
               </div>
             </ActionForm>
+            <Link href={`/pdc/new?direction=ISSUED&bill=${exp.id}`} className="mt-3 inline-block text-xs text-primary hover:underline">Pay by post-dated cheque…</Link>
           </div>
         )}
       </Card>

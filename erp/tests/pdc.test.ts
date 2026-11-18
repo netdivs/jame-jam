@@ -158,3 +158,39 @@ describe("issued PDC (R5)", () => {
     expect(due.some((d) => d.id === c.id)).toBe(false);
   });
 });
+
+describe("issued PDC against a landed cost bill (T6-02 follow-up)", () => {
+  it("counts against the bill until it clears; clearing pays the bill and knocks off AP; bounce frees it", async () => {
+    const { recordLandedCostExpense } = await import("../src/server/purchase/landed-cost");
+    const acct = await ctxFor("accountant");
+    const owner = await ctxFor("owner");
+    const sup = await prisma.supplier.create({ data: { code: `S-${uid()}`, name: `Freight co ${uid()}`, supplierType: "LOCAL" } });
+    const product = await makeProduct("SLAB");
+    const sr = await prisma.taxCode.findUniqueOrThrow({ where: { code: "SR" } });
+    const po = await savePurchaseOrder(acct, null, { supplierId: sup.id, date: NOW, lines: [{ productId: product.id, sqm: "10", unitPrice: "100", taxCodeId: sr.id }] });
+    await submitPurchaseOrder(acct, po.id);
+    await approvePurchaseOrder(owner, po.id);
+    const cat = await prisma.landedCostCategory.findFirstOrThrow();
+    const bill = await recordLandedCostExpense(acct, { purchaseOrderId: po.id, supplierId: sup.id, categoryId: cat.id, billNo: `FR-${uid()}`, date: NOW, amount: "1000", taxCodeId: sr.id }); // AED 1,050 with VAT
+    const total = (await prisma.landedCostExpense.findUniqueOrThrow({ where: { id: bill.id } })).total.toString();
+
+    const c = await recordIssuedCheque(acct, cheque({ landedCostExpenseId: bill.id, amount: total }));
+    expect(c.landedCostExpenseId).toBe(bill.id);
+    await expectError(recordSupplierPayment(acct, { landedCostExpenseId: bill.id, date: NOW, amount: "0.01", mode: "BANK" }), "VALIDATION", /open cheques/);
+    await expectError(recordIssuedCheque(acct, cheque({ landedCostExpenseId: bill.id, purchaseOrderId: po.id, amount: "1" })), "VALIDATION", /landed cost bill/);
+    expect((await prisma.landedCostExpense.findUniqueOrThrow({ where: { id: bill.id } })).paidAmount.toString()).toBe("0");
+
+    const ap = async () => {
+      const a = await prisma.journalLine.aggregate({ where: { account: { systemKey: { in: ["AP", "SUPPLIER_ADVANCES"] } }, partyId: sup.id }, _sum: { debit: true, credit: true } });
+      return D(a._sum.credit ?? 0).minus(D(a._sum.debit ?? 0)).toString();
+    };
+    expect(await ap()).toBe("0"); // AP 1,050 owed, advance 1,050 given by cheque
+    await changeChequeStatus(acct, c.id, { action: "clear", date: plus(10) });
+    const paid = await prisma.landedCostExpense.findUniqueOrThrow({ where: { id: bill.id } });
+    expect(paid.paidAmount.toString()).toBe(total);
+    expect(paid.paymentStatus).toBe("PAID");
+    const apOnly = await prisma.journalLine.aggregate({ where: { account: { systemKey: "AP" }, partyId: sup.id }, _sum: { debit: true, credit: true } });
+    expect(D(apOnly._sum.credit ?? 0).minus(D(apOnly._sum.debit ?? 0)).toString()).toBe("0");
+    expect((await pdcReconciliation()).ok).toBe(true);
+  });
+});

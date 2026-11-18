@@ -36,8 +36,11 @@ const baseSchema = {
 };
 export const receivedSchema = z.object({ ...baseSchema, customerId: optText(40), proformaInvoiceId: optText(40) });
 export const issuedSchema = z
-  .object({ ...baseSchema, purchaseOrderId: optText(40), openingItemId: optText(40), bankAccountId: optText(40) })
-  .refine((v) => Boolean(v.purchaseOrderId) !== Boolean(v.openingItemId), { message: "Choose the purchase order (or the opening supplier invoice) this cheque pays", path: ["purchaseOrderId"] });
+  .object({ ...baseSchema, purchaseOrderId: optText(40), openingItemId: optText(40), landedCostExpenseId: optText(40), bankAccountId: optText(40) })
+  .refine((v) => [v.purchaseOrderId, v.openingItemId, v.landedCostExpenseId].filter(Boolean).length === 1, {
+    message: "Choose the purchase order, landed cost bill or opening supplier invoice this cheque pays",
+    path: ["purchaseOrderId"],
+  });
 
 async function lockCheque(tx: Tx, id: string) {
   const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "Cheque" WHERE "id" = ${id} FOR UPDATE`;
@@ -54,6 +57,19 @@ function dates(issue: string, due: string) {
   const dueDate = toDateOnly(due);
   if (dueDate < issueDate) throw new AppError("VALIDATION", "The cheque date (due date) cannot be before the issue date", { fields: { dueDate: "Before the issue date" } });
   return { issueDate, dueDate };
+}
+
+/** Lock a landed cost bill for an issued cheque; returns it and what can still be paid (payments and open cheques). */
+async function lockBill(tx: Tx, id: string) {
+  const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "LandedCostExpense" WHERE "id" = ${id} FOR UPDATE`;
+  if (rows.length === 0) throw new AppError("NOT_FOUND", "Landed cost bill not found");
+  const bill = await tx.landedCostExpense.findUniqueOrThrow({ where: { id }, include: { supplier: true } });
+  return { bill, open: D(bill.total).minus(bill.paidAmount).minus(await pendingOnBill(tx, id)) };
+}
+
+/** Issued cheques not yet cleared against a landed cost bill. */
+export async function pendingOnBill(tx: Tx, billId: string) {
+  return D((await tx.cheque.aggregate({ where: { landedCostExpenseId: billId, status: "ISSUED" }, _sum: { amount: true } }))._sum.amount ?? 0);
 }
 
 /** Open PDC amount already promised against a PI (counts against its total with the receipts). */
@@ -127,7 +143,7 @@ export async function recordIssuedCheque(ctx: Ctx, raw: unknown) {
   const amount = round2(input.amount);
   return inTx(async (tx) => {
     // Against a PO, or against an opening supplier invoice (T11-01).
-    let target: { supplierId: string; supplierName: string; poId: string | null; openingItemId: string | null; label: string };
+    let target: { supplierId: string; supplierName: string; poId: string | null; openingItemId: string | null; billId: string | null; label: string };
     if (input.purchaseOrderId) {
       const po = await lockPo(tx, input.purchaseOrderId);
       if (!LIVE.includes(po.status)) throw new AppError("VALIDATION", `PO ${po.number} must be approved before it can be paid`);
@@ -136,11 +152,15 @@ export async function recordIssuedCheque(ctx: Ctx, raw: unknown) {
       const pending = D((await tx.cheque.aggregate({ where: { purchaseOrderId: po.id, status: "ISSUED" }, _sum: { amount: true } }))._sum.amount ?? 0);
       const open = cap.minus(po.paidAmount).minus(pending);
       if (amount.gt(open)) throw new AppError("VALIDATION", `PO ${po.number} can take at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
-      target = { supplierId: po.supplierId, supplierName: po.supplier.name, poId: po.id, openingItemId: null, label: `PO ${po.number}` };
+      target = { supplierId: po.supplierId, supplierName: po.supplier.name, poId: po.id, openingItemId: null, billId: null, label: `PO ${po.number}` };
+    } else if (input.landedCostExpenseId) {
+      const { bill, open } = await lockBill(tx, input.landedCostExpenseId);
+      if (amount.gt(open)) throw new AppError("VALIDATION", `Bill ${bill.billNo} can take at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
+      target = { supplierId: bill.supplierId, supplierName: bill.supplier.name, poId: null, openingItemId: null, billId: bill.id, label: `bill ${bill.billNo}` };
     } else {
       const { item, open } = await lockOpeningPayable(tx, input.openingItemId!);
       if (amount.gt(open)) throw new AppError("VALIDATION", `Opening invoice ${item.refNo} can take at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
-      target = { supplierId: item.supplierId!, supplierName: item.supplier!.name, poId: null, openingItemId: item.id, label: `opening invoice ${item.refNo}` };
+      target = { supplierId: item.supplierId!, supplierName: item.supplier!.name, poId: null, openingItemId: item.id, billId: null, label: `opening invoice ${item.refNo}` };
     }
     const bank = await cashAccountFor(tx, "BANK", input.bankAccountId);
     const bankRow = await tx.bankAccount.findUniqueOrThrow({ where: { id: bank.bankAccountId! } });
@@ -159,6 +179,7 @@ export async function recordIssuedCheque(ctx: Ctx, raw: unknown) {
         supplierId: target.supplierId,
         purchaseOrderId: target.poId,
         openingItemId: target.openingItemId,
+        landedCostExpenseId: target.billId,
         bankAccountId: bankRow.id,
         status: "ISSUED",
         remarks: input.remarks ?? null,
@@ -226,6 +247,7 @@ export async function changeChequeStatus(ctx: Ctx, id: string, raw: unknown) {
     if (!c0) throw new AppError("NOT_FOUND", "Cheque not found");
     if (c0.purchaseOrderId) await lockPo(tx, c0.purchaseOrderId);
     if (c0.openingItemId) await tx.$queryRaw`SELECT "id" FROM "OpeningItem" WHERE "id" = ${c0.openingItemId} FOR UPDATE`;
+    if (c0.landedCostExpenseId) await tx.$queryRaw`SELECT "id" FROM "LandedCostExpense" WHERE "id" = ${c0.landedCostExpenseId} FOR UPDATE`;
     if (c0.proformaInvoiceId) await tx.$queryRaw`SELECT "id" FROM "ProformaInvoice" WHERE "id" = ${c0.proformaInvoiceId} FOR UPDATE`;
     const c = await lockCheque(tx, id);
     const allowed = ALLOWED[c.direction][input.action] ?? [];
@@ -263,6 +285,24 @@ export async function changeChequeStatus(ctx: Ctx, id: string, raw: unknown) {
           const pi = await tx.proformaInvoice.findUniqueOrThrow({ where: { id: c.proformaInvoiceId } });
           await tx.proformaInvoice.update({ where: { id: pi.id }, data: { receivedAmount: D(pi.receivedAmount).plus(amount) } });
         }
+      } else if (c.landedCostExpenseId) {
+        // Landed cost bill: AP was credited when the bill was recorded; knock it off from the cheque's advance.
+        const bill = await tx.landedCostExpense.findUniqueOrThrow({ where: { id: c.landedCostExpenseId } });
+        const paid = D(bill.paidAmount).plus(amount);
+        await tx.landedCostExpense.update({ where: { id: bill.id }, data: { paidAmount: paid, paymentStatus: paymentStatusOf(paid, D(bill.total)) } });
+        const party = { partyType: "SUPPLIER" as const, partyId: c.supplierId! };
+        await postJournal(tx, ctx, {
+          date,
+          sourceType: "PDC_CLEARED",
+          sourceId: c.id,
+          memo: `${c.number} — cheque ${c.chequeNo} to ${c.supplier?.name ?? ""} cleared (bill ${bill.billNo})`,
+          lines: [
+            { account: "PDC_PAYABLE", debit: amount },
+            { account: bank.account, credit: amount },
+            { account: "AP", debit: amount, ...party },
+            { account: "SUPPLIER_ADVANCES", credit: amount, ...party },
+          ],
+        });
       } else if (c.openingItemId) {
         // Opening supplier invoice: the AP is knocked off from the advance the cheque created.
         const item = await tx.openingItem.findUniqueOrThrow({ where: { id: c.openingItemId } });

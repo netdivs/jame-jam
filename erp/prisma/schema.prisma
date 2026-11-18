@@ -938,6 +938,7 @@ model LandedCostExpense {
   createdAt       DateTime               @default(now())
   allocations     LandedCostAllocation[]
   payments        SupplierPayment[]
+  cheques         Cheque[]
 
   @@unique([supplierId, billNo])
   @@index([purchaseOrderId])
@@ -1201,43 +1202,46 @@ enum ChequeStatus {
 }
 
 model Cheque {
-  id                String              @id @default(cuid())
+  id                  String              @id @default(cuid())
   /// PDC-YYNNNN
-  number            String              @unique
-  direction         ChequeDirection
-  chequeNo          String
+  number              String              @unique
+  direction           ChequeDirection
+  chequeNo            String
   /// Received: the customer's bank. Issued: our bank account (bankAccountId).
-  bankName          String?
-  branch            String?
-  amount            Decimal             @db.Decimal(18, 2)
+  bankName            String?
+  branch              String?
+  amount              Decimal             @db.Decimal(18, 2)
   /// Date the cheque was handed over / written.
-  issueDate         DateTime            @db.Date
+  issueDate           DateTime            @db.Date
   /// Date on the cheque: it cannot clear before this.
-  dueDate           DateTime            @db.Date
-  customerId        String?
-  customer          Customer?           @relation(fields: [customerId], references: [id])
-  supplierId        String?
-  supplier          Supplier?           @relation(fields: [supplierId], references: [id])
-  proformaInvoiceId String?
-  proformaInvoice   ProformaInvoice?    @relation(fields: [proformaInvoiceId], references: [id])
-  purchaseOrderId   String?
-  purchaseOrder     PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  dueDate             DateTime            @db.Date
+  customerId          String?
+  customer            Customer?           @relation(fields: [customerId], references: [id])
+  supplierId          String?
+  supplier            Supplier?           @relation(fields: [supplierId], references: [id])
+  proformaInvoiceId   String?
+  proformaInvoice     ProformaInvoice?    @relation(fields: [proformaInvoiceId], references: [id])
+  purchaseOrderId     String?
+  purchaseOrder       PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
   /// Issued against an opening supplier invoice (T11-01) instead of a PO.
-  openingItemId     String?
-  openingItem       OpeningItem?        @relation(fields: [openingItemId], references: [id])
+  openingItemId       String?
+  openingItem         OpeningItem?        @relation(fields: [openingItemId], references: [id])
+  /// Issued against a landed cost bill (freight, customs, …) instead of a PO.
+  landedCostExpenseId String?
+  landedCostExpense   LandedCostExpense?  @relation(fields: [landedCostExpenseId], references: [id])
   /// Received: the bank it was deposited into. Issued: the bank it is drawn on.
-  bankAccountId     String?
-  bankAccount       BankAccount?        @relation(fields: [bankAccountId], references: [id])
-  status            ChequeStatus
-  remarks           String?
-  bounceReason      String?
-  replacesId        String?             @unique
-  replaces          Cheque?             @relation("ChequeReplacement", fields: [replacesId], references: [id])
-  replacedBy        Cheque?             @relation("ChequeReplacement")
-  createdById       String?
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  history           ChequeStatusEvent[]
+  bankAccountId       String?
+  bankAccount         BankAccount?        @relation(fields: [bankAccountId], references: [id])
+  status              ChequeStatus
+  remarks             String?
+  bounceReason        String?
+  replacesId          String?             @unique
+  replaces            Cheque?             @relation("ChequeReplacement", fields: [replacesId], references: [id])
+  replacedBy          Cheque?             @relation("ChequeReplacement")
+  createdById         String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  history             ChequeStatusEvent[]
 
   @@index([direction, status, dueDate])
   @@index([customerId])

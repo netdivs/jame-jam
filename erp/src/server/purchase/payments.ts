@@ -9,6 +9,7 @@ import { cashAccountFor } from "../accounting/banks";
 import { dateStr, decimal, optText, parse } from "../validation";
 import { LIVE, lockPo, paymentStatusOf } from "./orders";
 import { lockOpeningPayable, settleOpeningInvoice } from "../accounting/opening";
+import { pendingOnBill } from "../receipts/cheques";
 
 export const paymentSchema = z
   .object({
@@ -145,9 +146,10 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
     const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "LandedCostExpense" WHERE "id" = ${input.landedCostExpenseId!} FOR UPDATE`;
     if (rows.length === 0) throw new AppError("NOT_FOUND", "Landed cost bill not found");
     const exp = await tx.landedCostExpense.findUniqueOrThrow({ where: { id: input.landedCostExpenseId! }, include: { supplier: true } });
-    const open = D(exp.total).minus(exp.paidAmount);
+    // Cheques issued against the bill but not yet cleared are already promised (T6-02).
+    const open = D(exp.total).minus(exp.paidAmount).minus(await pendingOnBill(tx, exp.id));
     if (amount.gt(open)) {
-      throw new AppError("VALIDATION", `Bill ${exp.billNo} can be paid at most AED ${open.toFixed(2)} more`, { fields: { amount: `At most ${open.toFixed(2)}` } });
+      throw new AppError("VALIDATION", `Bill ${exp.billNo} can be paid at most AED ${open.toFixed(2)} more (after payments and open cheques)`, { fields: { amount: `At most ${open.toFixed(2)}` } });
     }
     const paid = D(exp.paidAmount).plus(amount);
     await tx.landedCostExpense.update({ where: { id: exp.id }, data: { paidAmount: paid, paymentStatus: paymentStatusOf(paid, D(exp.total)) } });

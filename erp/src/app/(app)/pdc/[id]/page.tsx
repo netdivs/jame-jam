@@ -14,7 +14,7 @@ export default async function ChequeDetail({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const c = await prisma.cheque.findUnique({
     where: { id },
-    include: { customer: true, supplier: true, bankAccount: true, proformaInvoice: true, purchaseOrder: true, openingItem: true, replaces: true, replacedBy: true, history: { orderBy: { createdAt: "asc" } } },
+    include: { customer: true, supplier: true, bankAccount: true, proformaInvoice: true, purchaseOrder: true, openingItem: true, landedCostExpense: true, replaces: true, replacedBy: true, history: { orderBy: { createdAt: "asc" } } },
   });
   if (!c || (c.direction === "ISSUED" && !has("purchase.view"))) notFound();
   const [entries, banks, users] = await Promise.all([
@@ -58,6 +58,8 @@ export default async function ChequeDetail({ params }: { params: Promise<{ id: s
                 <Link key="pi" className="text-primary hover:underline" href={`/sales/proformas/${c.proformaInvoice.id}`}>Proforma {c.proformaInvoice.number}</Link>
               ) : c.purchaseOrder ? (
                 <Link key="po" className="text-primary hover:underline" href={`/purchase/orders/${c.purchaseOrder.id}`}>PO {c.purchaseOrder.number}</Link>
+              ) : c.landedCostExpense ? (
+                <Link key="lc" className="text-primary hover:underline" href={`/purchase/landed-costs/${c.landedCostExpense.id}`}>Landed cost bill {c.landedCostExpense.billNo}</Link>
               ) : c.openingItem ? (
                 <Link key="ob" className="text-primary hover:underline" href={`/accounts/opening?q=${encodeURIComponent(c.openingItem.number)}`}>Opening invoice {c.openingItem.refNo}</Link>
               ) : (

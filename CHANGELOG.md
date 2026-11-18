@@ -20,6 +20,9 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — post-dated cheques for landed cost bills
+- An issued cheque can pay a landed cost bill ("Pay by post-dated cheque…" on the bill); open cheques count against the bill's PV limit; clearing marks the bill paid and knocks off AP. Migration `cheques_landed_cost` (additive). TD-034. Tests: 114.
+
 ### Fixed — forms keep what was typed after an error
 - A form refused by the server (validation, limits, permissions) no longer clears its fields: `ActionForm` submits without React 19's automatic form reset and clears only on success when asked (`resetOnSuccess`). Applies to every form in the app, including sign-in.
 
