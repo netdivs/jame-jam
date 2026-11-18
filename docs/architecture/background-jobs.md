@@ -1,8 +1,10 @@
 # Background Jobs
 
-## 1. Current state (Implemented)
+## 1. Current state (Implemented, 18 Nov 2026 — TJ-01, TD-023)
 
-**No background or scheduled jobs exist.** There is no job runner, queue, cron entry or worker container in the repository. `systemCtx` (`erp/src/server/core.ts`) exists for seeds and future jobs; it bypasses permission checks and records `userId = null` in audit rows.
+Built as recommended in §3: jobs in `erp/src/server/jobs/index.ts` (`pi-expiry`, `session-cleanup`, `stock-gl-check`), runner `erp/scripts/run-jobs.ts` (`npm run jobs:run`), a `jobs` service in `docker-compose.prod.yml` (hourly, `TZ=Asia/Dubai`, takes effect at the release), and the `JobRun` table: unique (job, business date) so each job runs once per day and overlapping runners skip. Manual runs: Settings → Scheduled jobs (`jobs.run`). SO reservation expiry waits for C2; PDC and CRM reminders come with their modules.
+
+The rest of this page is the original analysis, kept for reference. Before TJ-01 there was no job runner, queue, cron entry or worker container in the repository. `systemCtx` (`erp/src/server/core.ts`) exists for seeds and future jobs; it bypasses permission checks and records `userId = null` in audit rows.
 
 Work that would normally be scheduled is either not built yet or done on demand:
 

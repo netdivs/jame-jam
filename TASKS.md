@@ -42,14 +42,14 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T5-06 | TI service: from SO (or PI); FTA fields; post Dr AR / Cr SALES, Cr VAT_OUTPUT; reservation moves with invoiced qty; partial invoicing | High | T5-02, T5-04 | BLOCKED (C4) | O | D1, D4; backend rejects TI without SO | H R P G A |
 | T5-07 | Customer advance auto knock-off on TI (from PI-referenced receipts) | Med | T6-01 | PLANNED | O | Advance applied; payment status updated | H G |
 | T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | PARTIAL: SO + PI screens done; TI screens with T5-06 | K | Mobile usable; mirrors backend errors | HTTP/E2E |
-| T5-09 | `taxCode.change` permission + reason for non-SR codes on sales (and purchase) lines (F12) | Med | T5-01 | PARTIAL: enforced on sales lines; purchase lines still open | O | Spec §3.3.5; audited | R P A |
+| T5-09 | `taxCode.change` permission + reason for non-SR codes on sales (and purchase) lines (F12) | Med | T5-01 | DONE (sales TD-019, purchase TD-022) | O | Spec §3.3.5; audited | R P A |
 | T5-10 | Sales permissions in `rbac.ts` (spec §5 matrix) | High | — | DONE | C | Matrix tests per role | P |
 
 ## Step 6 — Receipts, PDC, Delivery Notes
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | PLANNED | O | Payment status = total − allocations | H R P G A |
+| T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | PARTIAL: receipts and advances (with PI link) done; allocation to TIs waits for T5-06 (C4) | O | Payment status = total − allocations | H R P G A |
 | T6-02 | PDC received/issued with status history and GL (PDC_RECEIVABLE/PAYABLE) | High | T6-01, T8-03 | PLANNED | O | R5; PDC counts as payment only when cleared | H R P G A |
 | T6-03 | DN: only when TI fully paid (BD-15); consume reservation, Dr COGS / Cr INVENTORY; partial dispatch | High | T6-01 | PLANNED | O | R10 | H R P G S A |
 | T6-04 | PDC due reminders job + dashboard widget | Med | T6-02, TJ-01 | PLANNED | O/K | Reminder N days ahead (`pdcReminderDays`) | H |
@@ -67,12 +67,12 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
 | T8-01 | Customer and supplier ledgers and statements | High | T6-01 | PLANNED | O | Ledger totals = AR/AP control (spec §11.3) | G |
-| T8-02 | Manual journal voucher (permission, balanced, period lock) | Med | — | READY | O | Uses `postJournal` | H R P G A |
-| T8-03 | Bank account master; payments choose bank account (replaces single BANK_MAIN, F9) | High | — | READY | C (schema) | Existing BANK_MAIN mapped to first bank account | H G |
+| T8-02 | Manual journal voucher (permission, balanced, period lock) | Med | — | DONE | O | Uses `postJournal` | H R P G A |
+| T8-03 | Bank account master; payments choose bank account (replaces single BANK_MAIN, F9) | High | — | DONE | C (schema) | Existing BANK_MAIN mapped to first bank account | H G |
 | T8-04 | Petty cash (top-up, expense with category, optional input VAT, daily cash report) | Med | T8-03 | PLANNED | O | — | H R P G |
 | T8-05 | Bank reconciliation (manual/CSV statement lines, matching) | Med | T8-03 | PLANNED | O | — | H G |
 | T8-06 | Refund vouchers (customer and supplier) | Med | T8-03 | PLANNED | O | Unblocks T4-15 | H R P G |
-| T8-07 | Financial reports: trial balance, P&L, balance sheet | Med | — | READY | O | Ties to journals | G |
+| T8-07 | Financial reports: trial balance, P&L, balance sheet | Med | — | DONE | O | Ties to journals | G |
 
 ## Step 9 — VAT & Reports
 
@@ -109,7 +109,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | TS-03 | Run the app in Asia/Dubai business time (`TZ=Asia/Dubai` on the app container, or explicit timezone in `today()`) (F18) | High | user approval (prod config) | READY | C | Dates after midnight Dubai are correct; test with a fixed clock | H |
 | TS-04 | Base-only seed for production (no demo users/stock, password required, role reset in one transaction) (F19, F20) | Med | — | READY | O | `npm run db:seed:base`; documented in deployment.md | H |
 | TQ-01 | CI pipeline (typecheck, lint, test with disposable Postgres, build, drift check) | High | — | READY | C | Runs on every push/PR | — |
-| TJ-01 | Scheduled job runner (PI expiry, SO expiry, PDC/CRM reminders) | High | — | PLANNED | C | Idempotent; runs as `systemCtx`; logged | H |
+| TJ-01 | Scheduled job runner (PI expiry, SO expiry, PDC/CRM reminders) | High | — | DONE (jobs service in docker-compose.prod.yml is applied at the release) | C | Idempotent; runs as `systemCtx`; logged | H |
 | TX-01 | Choose PDF library (ADR) | Med | — | PLANNED | C | Entry in DECISIONS.md | — |
 | TX-02 | Choose Excel library (ADR) | Med | — | PLANNED | C | Entry in DECISIONS.md | — |
 | TA-01 | Configure an OpenCode model provider so backend tasks can be delegated | Low | user | BLOCKED (user) | user | `opencode auth list` shows a provider | — |

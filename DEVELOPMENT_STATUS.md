@@ -1,6 +1,6 @@
 # Jame Jam ERP: Development Status
 
-**Last updated:** 18 Nov 2026 (Step 5 sales orders and proforma invoices built on `feat/step5-sales`)
+**Last updated:** 18 Nov 2026 (Step 5 part 1, customer receipts, bank accounts, journal vouchers, financial reports and scheduled jobs on `feat/step5-sales`)
 **Spec:** `requirements/jame_jam_erp_system_technical_specification.md` (v2.4)
 **Repo:** `git@github.com:netdivs/jame-jam.git`, branch `main`
 **Live (demo):** https://jame.netdivs.us
@@ -16,9 +16,9 @@
 | 3 | Inventory core (D2, D3) | ✅ Done |
 | 4 | Purchase & import (D5, R3, R6) | ✅ Development complete and verified (17 Nov 2026). Not deployed. Browser-verified (T4-11). Deployment deferred until all steps are done (user, 18 Nov 2026). Still to come: client confirmation of C1/C5/C6 |
 | 5 | Sales: SO, PI, TI (D1, D4, R1) | 🔨 In progress. Sales orders with reservation (D1) and proforma invoices with expiry/renewal (R1) are built and verified. VAT maths (D4) built as the C4 proposal. Tax invoices wait for C4; reservation expiry waits for C2 |
-| 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | ⏳ Not started |
+| 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | 🔨 Started: customer receipts/advances (CR/RV) built. PDC next; allocation and DN wait for the tax invoice (C4) |
 | 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
-| 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done (chart of accounts, journals, period lock are in Foundation) |
+| 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. Ledgers, petty cash, bank reconciliation, refunds to come |
 | 9 | VAT & reports (R7) | ⏳ Not started |
 | 10 | CRM (R9) | ⏳ Not started |
 | 11 | Opening setup (R8), mobile dashboard, demo data, client demo | 🟡 Partly done (opening stock entry, demo stock) |
@@ -298,6 +298,19 @@ Branch `feat/step5-sales` (not merged, not deployed). Migration `20261118060245_
 **Verification (18 Nov 2026):** typecheck, lint and build pass; Vitest 62/62 (16 new sales tests: spec example 81.72 × 100 → 8,172.00 / 389.14 / 7,782.86, 300 random documents reconcile, concurrent SOs never double-reserve, edit/cancel figures, permissions, tax code rule, PI expiry/renewal/no GL); no migration drift; Playwright 4/4 (purchase and sales flows, desktop and Pixel 7). Stock = Inventory GL is unchanged by SOs and PIs (no stock moves until the DN).
 
 **Still open in Step 5:** T5-03 SO reservation expiry/extension (C2), T5-06 tax invoice and its posting (C4), T5-07 advance knock-off (needs Step 6 receipts), T5-08 TI screens, T5-09 for purchase lines, TJ-01 job runner for PI expiry.
+
+## 6c. Accounts, receipts and scheduled jobs 🔨 (built 18 Nov 2026, branch `feat/step5-sales`)
+
+Done without waiting for client decisions, in this order: T8-03 → T8-02 → T8-07 → T6-01 (advance part) → TJ-01 → T5-09.
+
+- **Bank accounts (T8-03, TD-024):** `/accounts/banks`. Each bank account has its own ledger account under Cash & Bank; the old "Bank - Main Account" is the default (migration backfill). Supplier payments and customer receipts choose "Paid from / Received into".
+- **Manual journal vouchers (T8-02, TD-020):** `/accounts/journals/new`, detail and reversal. Balanced, period-locked, audited; sub-ledger accounts refused; party required on AR/AP/advances. Owner and Accountant (`journal.post`).
+- **Financial reports (T8-07):** trial balance, profit & loss, balance sheet under Accounts (`reports.financial`: Owner, Manager, Accountant). No year-end closing yet: profit to date shows as current earnings.
+- **Customer receipts (T6-01 advance part, TD-021):** `/receipts`, Record receipt from a proforma. CR/RV numbering; Dr cash/bank, Cr Customer Advances; cancel posts the reverse. A paid proforma no longer expires. Allocation to tax invoices waits for T5-06 (C4); PDC with T6-02.
+- **Scheduled jobs (TJ-01, TD-023):** proforma expiry, session clean-up, stock = GL check; once per business day; Settings → Scheduled jobs. The `jobs` service in `docker-compose.prod.yml` takes effect only at the release.
+- **Tax code rule on purchase lines (T5-09, TD-022).**
+
+**Verification (18 Nov 2026):** typecheck, lint and build pass; Vitest 74/74; no migration drift; Playwright 6/6 twice (purchase; sales with receipts; accounts — desktop and Pixel 7). The job runner ran twice on the E2E database: first run OK (stock = GL, difference 0), second run skipped every job.
 
 ## 7. Deployment
 

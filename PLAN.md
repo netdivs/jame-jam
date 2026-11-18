@@ -11,9 +11,9 @@ Roadmap from the current state to production. Sequence follows spec §13. Task-l
 | 3 | Inventory core | ✅ Done | D2, D3 |
 | 4 | Purchase & import | ✅ Development complete and browser-verified (T4-11); not deployed (deployment deferred, see below); awaiting client confirmation of C1/C5/C6 | D5, R3, R6 |
 | 5 | Sales SO/PI/TI | 🔨 In progress — SO + reservation, PI + expiry/renewal and the VAT engine (C4 proposal) built; TI blocked by C4, reservation expiry by C2 | D1, D4, R1 |
-| 6 | Receipts, PDC, DN | Planned | R5, R10 |
+| 6 | Receipts, PDC, DN | Started — customer receipts/advances done; PDC, allocation and DN to come (allocation and DN wait for the TI, C4) | R5, R10 |
 | 7 | Returns & credit notes | Planned — CN posting blocked by C7 | R2, R4 |
-| 8 | Accounts | Partly done (CoA, GL, period lock) | §3.4 |
+| 8 | Accounts | Partly done (CoA, GL, period lock, bank accounts, journal vouchers, trial balance / P&L / balance sheet) | §3.4 |
 | 9 | VAT & reports | Planned | R7 |
 | 10 | CRM | Planned | R9 |
 | 11 | Opening setup, demo, readiness | Partly done (opening stock, demo stock) | R8, demo |

@@ -107,3 +107,9 @@ Audited: PV `create` (number, PO or bill, amount, toAdvance, toPayable); journal
 `erp/tests/purchase.test.ts`: "blocks paying beyond the PO total"; "cannot cancel a PO that has payments"; "partial payment blocks collection and GRN; 100% verified allows them"; "invoice: unique number per supplier, no more than received, advance knock-off, RC VAT, closes the PO". None yet for landed cost bill payments or customer receipts — required: bill payment cap, CR/RV knock-off, DN gate (R10).
 
 Related: [Purchasing](purchasing.md) · [Landed costs](landed-costs.md) · [PDC](pdc.md) · [Delivery notes](delivery-notes.md) · [Credit notes](credit-notes.md) · [Accounting](accounting.md) · [Decisions](../../DECISIONS.md)
+
+## Update 18 Nov 2026
+
+- **Customer receipts** (CR cash / RV bank) are built: `erp/src/server/receipts/receipts.ts`, `/receipts`. Posting Dr Cash/Bank, Cr Customer Advances (party = customer). Optional proforma link (TD-021). Cancel posts the reverse entry. Allocation to tax invoices waits for T5-06 (C4); PDC with T6-02; refunds with T8-06.
+- **Bank accounts** are built (TD-024): supplier payments and receipts choose the bank account.
+

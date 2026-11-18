@@ -4,6 +4,16 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 
 ## [Unreleased]
 
+### Added — accounts, receipts and jobs (not deployed)
+- Bank accounts (each with its own ledger account); supplier payments and customer receipts choose the bank.
+- Manual journal vouchers with reversal; trial balance, profit & loss and balance sheet.
+- Customer receipts (CR cash / RV bank) held as customer advances, optionally against a proforma; cancel with reversal. A paid proforma no longer expires.
+- Scheduled jobs: proforma expiry, session clean-up, stock = GL check; Settings → Scheduled jobs. A `jobs` service is added to docker-compose.prod.yml (takes effect at the release).
+- Tax code rule on purchase order and supplier invoice lines.
+- New permissions: `receipts.*`, `bank.manage`, `journal.post`, `reports.financial`, `jobs.run`.
+- Migrations (additive): `bank_accounts` (with backfill of the main bank), `customer_receipts`, `job_runs`, `purchase_tax_reason`.
+- Tests: 74 Vitest; Playwright 6 (purchase, sales with receipts, accounts — desktop and mobile).
+
 ### Added — Step 5 Sales, part 1 (not deployed)
 - Sales orders that reserve stock on save; editing adjusts and cancelling releases the reservations.
 - Proforma invoices from a sales order: validity from settings, expiry (job-ready), audited renewal, close/cancel. No accounting.

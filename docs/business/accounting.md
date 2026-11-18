@@ -114,3 +114,8 @@ None blocking. C7 affects how credit notes on paid invoices post.
 `erp/tests/foundation.test.ts`: "rejects an unbalanced journal"; "rejects posting to a group account or an unknown key"; "posts a balanced journal with a JE number"; "refuses to post into a locked period". Inventory/purchase reconciliation tests in [Inventory](inventory.md).
 
 Related: [VAT](vat.md) · [Payments](payments.md) · [PDC](pdc.md) · [Opening balances](opening-balances.md) · [Accounting engine](../architecture/accounting-engine.md) · [Decisions](../../DECISIONS.md)
+
+## Update 18 Nov 2026
+
+Built: bank accounts with their own ledger accounts (TD-024), manual journal vouchers with reversal (TD-020, `erp/src/server/accounting/journals.ts`), and trial balance / profit & loss / balance sheet (`erp/src/server/accounting/reports.ts`, under Accounts). Tests: `erp/tests/accounts.test.ts`.
+
