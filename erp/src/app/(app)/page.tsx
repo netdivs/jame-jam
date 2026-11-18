@@ -4,8 +4,11 @@ import { requireUser } from "@/server/auth";
 import { D, prisma, sum, today } from "@/server/core";
 import { chequesDue } from "@/server/receipts/cheques";
 import { followUpsDue } from "@/server/crm/crm";
+import { partyBalances } from "@/server/accounting/ledgers";
+import { cashAccounts } from "@/server/accounting/opening";
+import { OPEN_RECEIVED } from "@/server/receipts/cheques";
 import { inventoryReconciliation, listMovements, stockByProduct } from "@/server/inventory/queries";
-import { fmtAED, fmtDate, fmtDateTime, fmtSqm, titleCase } from "@/lib/format";
+import { fmtAED, fmtDate, fmtDateTime, fmtMoney, fmtSqm, titleCase } from "@/lib/format";
 
 export const metadata = { title: "Dashboard" };
 
@@ -17,6 +20,7 @@ export default async function Dashboard() {
     return (
       <>
         <PageHeader title={`Welcome, ${user.name}`} subtitle={user.roleName} />
+        <Glance can={can} />
         {can("crm.view") && <FollowUpsDue userId={user.ctx.userId!} />}
         <Card>
           <p className="text-sm text-muted">Use the menu to open the modules you have access to.</p>
@@ -42,9 +46,10 @@ export default async function Dashboard() {
     <>
       <PageHeader
         title={`Welcome, ${user.name}`}
-        subtitle={`${user.roleName} · ${fmtDate(new Date())}`}
+        subtitle={`${user.roleName} · ${fmtDate(today())}`}
         actions={can("inventory.openingStock") && <LinkButton href="/inventory/lots/new">Enter opening stock</LinkButton>}
       />
+      <Glance can={can} />
       {can("crm.view") && <FollowUpsDue userId={user.ctx.userId!} />}
       {can("receipts.view") && <PdcDue issued={can("purchase.view")} />}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -120,12 +125,12 @@ async function PdcDue({ issued }: { issued: boolean }) {
         <tbody>
           {due.slice(0, 6).map((c) => (
             <tr key={c.id}>
-              <td className="whitespace-nowrap">
+              <td>
                 <Link href={`/pdc/${c.id}`} className="font-medium text-primary hover:underline">{c.number}</Link>
+                <span className="block text-xs text-muted">{c.direction === "RECEIVED" ? "From" : "To"} {c.customer?.name ?? c.supplier?.name}</span>
               </td>
-              <td>{c.direction === "RECEIVED" ? "From" : "To"} {c.customer?.name ?? c.supplier?.name}</td>
               <td className={`whitespace-nowrap ${c.dueDate < now ? "font-medium text-danger" : ""}`}>{fmtDate(c.dueDate)}</td>
-              <td className="num">{fmtAED(c.amount)}</td>
+              <td className="num whitespace-nowrap">{fmtMoney(c.amount)}</td>
             </tr>
           ))}
         </tbody>
@@ -158,5 +163,59 @@ async function FollowUpsDue({ userId }: { userId: string }) {
         </tbody>
       </Table>
     </Card>
+  );
+}
+
+/** Business at a glance (spec §6 mobile dashboard): sales, cash/bank, receivables, payables, cheques — by permission. */
+async function Glance({ can }: { can: (p: string) => boolean }) {
+  const sales = can("sales.view");
+  const money = can("accounts.view");
+  const cheques = can("receipts.view");
+  if (!sales && !money && !cheques) return null;
+  const monthStart = new Date(Date.UTC(today().getUTCFullYear(), today().getUTCMonth(), 1));
+  const [openSo, monthSo, activePi, cust, sup, cashList, pdc] = await Promise.all([
+    sales ? prisma.salesOrder.aggregate({ where: { status: { in: ["OPEN", "PARTIALLY_INVOICED"] } }, _count: { _all: true }, _sum: { total: true } }) : null,
+    sales ? prisma.salesOrder.aggregate({ where: { date: { gte: monthStart }, status: { not: "CANCELLED" } }, _count: { _all: true }, _sum: { total: true } }) : null,
+    sales ? prisma.proformaInvoice.aggregate({ where: { status: "ACTIVE" }, _count: { _all: true }, _sum: { total: true, receivedAmount: true } }) : null,
+    money ? partyBalances("CUSTOMER") : null,
+    money ? partyBalances("SUPPLIER") : null,
+    money ? cashAccounts() : null,
+    cheques ? prisma.cheque.aggregate({ where: { direction: "RECEIVED", status: { in: OPEN_RECEIVED } }, _count: { _all: true }, _sum: { amount: true } }) : null,
+  ]);
+  let cashTotal = D(0);
+  let bankTotal = D(0);
+  if (cashList) {
+    const sums = await prisma.journalLine.groupBy({ by: ["accountId"], where: { accountId: { in: cashList.map((c) => c.account.id) } }, _sum: { debit: true, credit: true } });
+    const bal = new Map(sums.map((x) => [x.accountId, D(x._sum.debit ?? 0).minus(D(x._sum.credit ?? 0))]));
+    for (const c of cashList) {
+      const b = bal.get(c.account.id) ?? D(0);
+      if (c.bank) bankTotal = bankTotal.plus(b);
+      else cashTotal = cashTotal.plus(b);
+    }
+  }
+  const owed = (m: Map<string, { balance: ReturnType<typeof D> }> | null, sign: 1 | -1) =>
+    m ? [...m.values()].reduce((a, b) => (b.balance.times(sign).gt(0) ? a.plus(b.balance.times(sign)) : a), D(0)) : D(0);
+  const tiles: { label: string; value: string; hint?: string; href: string }[] = [];
+  if (openSo) tiles.push({ label: "Open sales orders", value: fmtAED(openSo._sum.total ?? 0), hint: `${openSo._count._all} orders · stock reserved`, href: "/sales/orders" });
+  if (monthSo) tiles.push({ label: "Orders this month", value: fmtAED(monthSo._sum.total ?? 0), hint: `${monthSo._count._all} sales orders`, href: "/sales/orders" });
+  if (activePi) tiles.push({ label: "Active proformas", value: fmtAED(activePi._sum.total ?? 0), hint: `${activePi._count._all} · ${fmtAED(activePi._sum.receivedAmount ?? 0)} received`, href: "/sales/proformas" });
+  if (cashList) {
+    tiles.push({ label: "Bank", value: fmtAED(bankTotal), hint: "All bank accounts", href: "/accounts/banks" });
+    tiles.push({ label: "Cash & petty cash", value: fmtAED(cashTotal), href: "/petty-cash/daily" });
+  }
+  if (cust) {
+    tiles.push({ label: "Receivables", value: fmtAED(owed(cust, 1)), hint: "Customers who owe us", href: "/accounts/ledgers?type=customer" });
+    tiles.push({ label: "Customer advances", value: fmtAED(owed(cust, -1)), hint: "Held until invoiced or refunded", href: "/accounts/ledgers?type=customer" });
+  }
+  if (sup) tiles.push({ label: "Payables", value: fmtAED(owed(sup, 1)), hint: "We owe suppliers", href: "/accounts/ledgers?type=supplier" });
+  if (pdc) tiles.push({ label: "Cheques in hand", value: fmtAED(pdc._sum.amount ?? 0), hint: `${pdc._count._all} not yet cleared`, href: "/pdc?dir=RECEIVED" });
+  return (
+    <section aria-label="Business at a glance" className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {tiles.map((t) => (
+        <Link key={t.label} href={t.href} className="rounded-lg focus-visible:outline-2 focus-visible:outline-ring">
+          <Stat label={t.label} value={t.value} hint={t.hint} />
+        </Link>
+      ))}
+    </section>
   );
 }

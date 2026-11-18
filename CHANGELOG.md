@@ -20,6 +20,9 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — dashboard at a glance (T11-04)
+- Dashboard tiles by permission (sales, cash/bank, receivables, advances, payables, cheques in hand), each linking to its page; phone-friendly; the cheques-due list no longer cuts off on phones; the header shows the business date (Dubai), not the UTC date. Playwright dashboard spec (28 in total).
+
 ### Added — demo business data (T4-12, T11-03 partial)
 - `npx prisma db seed` (development/demo only) now also runs `seedDemoBusiness`: an import PO through every status with all 10 landed cost categories allocated, a local PO part-paid with a PDC, a PO awaiting approval; SOs with reservations and proformas active / expired / renewed; receipts and cheques pending / cleared / bounced-and-replaced; petty cash; bank statement lines to reconcile; CRM leads, opportunities (one won by its SO), interactions and follow-ups. All through the real services; skipped when any PO exists. Tax invoices, DNs, credit notes and VAT wait for C4/C7. Test: the demo leaves stock = GL, PDC = GL, parties = control accounts and a balanced trial balance (115 tests).
 
