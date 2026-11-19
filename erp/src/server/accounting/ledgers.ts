@@ -145,6 +145,8 @@ export function documentHref(r: { sourceType: string; sourceId: string | null; e
     case "TAX_INVOICE":
     case "INVOICE_ALLOCATION":
       return `/sales/invoices/${id}`;
+    case "CREDIT_NOTE":
+      return `/sales/credit-notes/${id}`;
     case "SUPPLIER_PAYMENT":
       return poOf?.get(id) ? `/purchase/orders/${poOf.get(id)}` : `/accounts/journals/${r.entryId}`;
     default:

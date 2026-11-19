@@ -1,13 +1,13 @@
 // Printable documents (T11-05, TD-035): each builder loads one stored document, checks the user may view it, and
 // maps it to a PrintDoc. Figures come from the stored values and snapshots, formatted like the screens.
-// Tax invoice and delivery note: built on the C4 proposal (module switch features.salesInvoicing). Not yet: credit note.
+// Tax invoice, delivery note and credit note: built on the C4/C7 proposals (module switch features.salesInvoicing).
 import { AppError, Ctx, D, assertCan, prisma, toDateOnly } from "../core";
 import { fmtDate, fmtMoney, fmtSqm } from "@/lib/format";
 import { partyStatement, type PartyType } from "../accounting/ledgers";
 import type { CompanyHeader, PrintDoc } from "./types";
 import { getSetting } from "../settings";
 
-export const PRINT_TYPES = ["po", "grn", "so", "pi", "ti", "dn", "receipt", "pv", "refund", "pdc", "petty", "statement"] as const;
+export const PRINT_TYPES = ["po", "grn", "so", "pi", "ti", "dn", "cn", "receipt", "pv", "refund", "pdc", "petty", "statement"] as const;
 export type PrintType = (typeof PRINT_TYPES)[number];
 
 const AED = (v: { toString(): string } | number) => `AED ${fmtMoney(D(v.toString()))}`;
@@ -227,6 +227,43 @@ async function dn(ctx: Ctx, id: string): Promise<PrintDoc> {
   };
 }
 
+/** Tax credit note (spec §3.3.8): original invoice no./date, customer TRN, reason, lines with VAT adjustment. */
+async function cn(ctx: Ctx, id: string): Promise<PrintDoc> {
+  assertCan(ctx, "sales.view");
+  const c = (await prisma.creditNote.findUnique({ where: { id }, include: { taxInvoice: true, items: { orderBy: { lineNo: "asc" }, include: { taxInvoiceItem: { include: { product: true, taxCode: true } } } } } })) ?? notFound("Credit note");
+  if (c.status !== "POSTED" || !c.number) throw new AppError("VALIDATION", "Only a posted credit note can be printed");
+  const money = (v: { toString(): string }) => fmtMoney(D(v.toString()));
+  return {
+    title: "Tax Credit Note",
+    number: c.number,
+    fileName: c.number,
+    facts: [["Date", fmtDate(c.date)], ["Original invoice", c.taxInvoice.number], ["Invoice date", fmtDate(c.taxInvoice.date)]],
+    party: { label: "Customer", lines: nonEmpty([c.customerName, c.taxInvoice.customerAddress, c.customerTrn && `TRN ${c.customerTrn}`]) },
+    extra: { label: "Supplier", lines: nonEmpty([c.taxInvoice.companyName, c.taxInvoice.companyAddress, c.taxInvoice.companyTrn && `TRN ${c.taxInvoice.companyTrn}`]) },
+    columns: [
+      { key: "n", label: "#", width: 0.4 },
+      { key: "item", label: "Description", width: 3 },
+      { key: "sqm", label: "SQM", align: "right", width: 1 },
+      { key: "net", label: "Taxable amount", align: "right", width: 1.3 },
+      { key: "rate", label: "VAT %", align: "right", width: 0.7 },
+      { key: "vat", label: "VAT (AED)", align: "right", width: 1.1 },
+      { key: "total", label: "Total (AED)", align: "right", width: 1.3 },
+    ],
+    rows: c.items.map((i) => ({
+      n: String(i.lineNo),
+      item: i.taxInvoiceItem.product.name,
+      sqm: D(i.sqm).gt(0) ? fmtSqm(D(i.sqm)) : "",
+      net: money(i.netAmount),
+      rate: i.taxInvoiceItem.taxCode.type === "SR" ? D(i.taxInvoiceItem.taxCode.rate).toString() : `0 (${i.taxInvoiceItem.taxCode.code})`,
+      vat: money(i.vatAmount),
+      total: money(i.grossAmount),
+    })),
+    totals: [["Total excl. VAT", AED(c.netTotal)], ["VAT adjustment", AED(c.vatTotal)], ["Total credited", AED(c.total)]],
+    notes: nonEmpty([`Reason: ${c.reason}`, D(c.toAdvance).gt(0) ? `${AED(c.toAdvance)} is held as credit for the customer.` : null]),
+    signatures: ["Authorised by", "Customer"],
+  };
+}
+
 async function receipt(ctx: Ctx, id: string): Promise<PrintDoc> {
   assertCan(ctx, "receipts.view");
   const r = (await prisma.customerReceipt.findUnique({ where: { id }, include: { customer: true, bankAccount: true, proformaInvoice: true } })) ?? notFound("Receipt");
@@ -384,6 +421,8 @@ export async function buildPrintDoc(ctx: Ctx, type: string, id: string, q: URLSe
       return ti(ctx, id);
     case "dn":
       return dn(ctx, id);
+    case "cn":
+      return cn(ctx, id);
     case "receipt":
       return receipt(ctx, id);
     case "pv":

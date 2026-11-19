@@ -8,7 +8,7 @@ const TILE = "BTT-3060 — Beige Travertine Tiles 30x60";
 
 test.describe.configure({ mode: "serial" });
 
-async function loginAs(page: Page, role: "owner" | "sales" | "store") {
+async function loginAs(page: Page, role: "owner" | "sales" | "store" | "manager" | "accountant") {
   await page.context().clearCookies();
   await page.goto("/login");
   await page.getByLabel("Email").fill(`${role}@jamejam.local`);
@@ -26,7 +26,7 @@ async function setModule(page: Page, on: boolean) {
   await expect(page.getByText(/Saved|No changes/).first()).toBeVisible();
 }
 
-test("tax invoice: convert a paid proforma, receive the rest, deliver", async ({ page }, info) => {
+test("tax invoice: convert a paid proforma, receive the rest, deliver, return", async ({ page }, info) => {
   test.skip(!PASSWORD, "E2E_PASSWORD is not set");
   let piUrl = "";
   let tiUrl = "";
@@ -92,6 +92,36 @@ test("tax invoice: convert a paid proforma, receive the rest, deliver", async ({
       await shot(page, info, "dn");
       await page.goto(tiUrl);
       await expect(page.getByText("Everything on this invoice has been delivered.")).toBeVisible();
+    });
+
+    let rrUrl = "";
+    await test.step("sales raises a return; the manager approves; the store receives it", async () => {
+      await loginAs(page, "sales");
+      await page.goto(tiUrl);
+      await page.getByLabel("Line 1 — SQM to return").fill("1");
+      await page.getByLabel("Reason").fill("Excess tiles");
+      await page.getByRole("button", { name: "Raise return request" }).click();
+      await expect(page).toHaveURL(/\/sales\/returns\/[a-z0-9]+$/);
+      rrUrl = new URL(page.url()).pathname;
+      await expect(page.getByRole("button", { name: "Approve return" })).toHaveCount(0);
+      await loginAs(page, "manager");
+      await page.goto(rrUrl);
+      await page.getByRole("button", { name: "Approve return" }).click();
+      await expect(page.getByText(/approved/).first()).toBeVisible();
+      await loginAs(page, "store");
+      await page.goto(rrUrl);
+      await page.getByRole("button", { name: "Record goods received" }).click();
+      await expect(page.getByText("Goods received back")).toBeVisible();
+    });
+
+    await test.step("the accountant issues the return credit note", async () => {
+      await loginAs(page, "accountant");
+      await page.goto(rrUrl);
+      await page.getByRole("button", { name: "Issue return credit note" }).click();
+      await expect(page).toHaveURL(/\/sales\/credit-notes\/[a-z0-9]+$/);
+      await expect(page.getByRole("heading", { name: /Credit note CN-/ })).toBeVisible();
+      await expect(page.getByText(/customer credit AED 105.00/)).toBeVisible();
+      await shot(page, info, "cn");
     });
   } finally {
     await setModule(page, false);

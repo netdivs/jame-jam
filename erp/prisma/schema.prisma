@@ -359,6 +359,8 @@ model Customer {
   taxInvoices        TaxInvoice[]
   invoiceAllocations InvoiceAllocation[]
   deliveryNotes      DeliveryNote[]
+  returnRequests     ReturnRequest[]
+  creditNotes        CreditNote[]
 }
 
 enum SupplierType {
@@ -1182,6 +1184,8 @@ model TaxInvoice {
   total             Decimal             @db.Decimal(18, 2)
   /// Paid through applied advances / receipts. Paid in full unlocks the delivery note (BD-15).
   settledAmount     Decimal             @default(0) @db.Decimal(18, 2)
+  /// Credit notes applied to the receivable (the part of a CN that reduced AR). Open = total − settled − credited.
+  creditedAmount    Decimal             @default(0) @db.Decimal(18, 2)
   paymentStatus     PaymentStatus       @default(UNPAID)
   notes             String?
   createdById       String?
@@ -1190,6 +1194,9 @@ model TaxInvoice {
   allocations       InvoiceAllocation[]
 
   deliveryNotes DeliveryNote[]
+
+  returnRequests ReturnRequest[]
+  creditNotes    CreditNote[]
 
   @@index([customerId])
   @@index([salesOrderId])
@@ -1218,8 +1225,13 @@ model TaxInvoiceItem {
   grossAmount      Decimal        @db.Decimal(18, 2)
   /// SQM released by delivery notes (Step 6).
   deliveredSqm     Decimal        @default(0) @db.Decimal(18, 4)
+  /// Credit notes on this line (incl. VAT); never more than the line total.
+  creditedAmount   Decimal        @default(0) @db.Decimal(18, 2)
 
   dnItems DeliveryNoteItem[]
+
+  rrItems ReturnRequestItem[]
+  cnItems CreditNoteItem[]
 
   @@unique([taxInvoiceId, lineNo])
 }
@@ -1269,6 +1281,128 @@ model DeliveryNoteItem {
   cost             Decimal        @db.Decimal(18, 2)
 
   @@unique([deliveryNoteId, lineNo])
+}
+
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RECEIVED
+  CREDITED
+}
+
+enum ReturnCondition {
+  /// Back into stock, sellable.
+  GOOD
+  /// Back into stock at cost, marked damaged (slab status DAMAGED); written off by a stock adjustment if needed.
+  DAMAGED
+  /// Not accepted back: no stock, not credited.
+  REJECTED
+}
+
+/// Sales return (spec §3.3.8, T7-01, BD-07, BD-09, R4): request → Owner/Manager approval → physical receipt with
+/// condition → stock in (only approved AND received SQM) → return credit note.
+model ReturnRequest {
+  id           String              @id @default(cuid())
+  number       String              @unique
+  taxInvoiceId String
+  taxInvoice   TaxInvoice          @relation(fields: [taxInvoiceId], references: [id])
+  customerId   String
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  customerName String
+  date         DateTime            @db.Date
+  reason       String
+  status       ReturnStatus        @default(PENDING)
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  receivedById String?
+  receivedAt   DateTime?
+  createdById  String?
+  createdAt    DateTime            @default(now())
+  items        ReturnRequestItem[]
+  creditNote   CreditNote?
+
+  @@index([taxInvoiceId])
+  @@index([status])
+}
+
+model ReturnRequestItem {
+  id               String           @id @default(cuid())
+  returnRequestId  String
+  returnRequest    ReturnRequest    @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  taxInvoiceItemId String
+  taxInvoiceItem   TaxInvoiceItem   @relation(fields: [taxInvoiceItemId], references: [id])
+  sqm              Decimal          @db.Decimal(18, 4)
+  receivedSqm      Decimal          @default(0) @db.Decimal(18, 4)
+  condition        ReturnCondition?
+  /// Stock value put back (Dr Inventory / Cr COGS), at the delivered cost.
+  value            Decimal          @default(0) @db.Decimal(18, 2)
+
+  @@unique([returnRequestId, lineNo])
+}
+
+enum CreditNoteKind {
+  RETURN
+  ADJUSTMENT
+}
+
+enum CreditNoteStatus {
+  PENDING_APPROVAL
+  POSTED
+  REJECTED
+}
+
+/// Tax credit note (spec §3.3.8, T7-02). Return-based (from a received return; posts at once) or adjustment
+/// (price / billing correction, reason, Owner/Manager approval; never moves stock). Numbered when posted.
+/// Paid invoice: the part above the invoice's open amount becomes customer advance (C7 proposal, setting).
+model CreditNote {
+  id              String           @id @default(cuid())
+  number          String?          @unique
+  kind            CreditNoteKind
+  status          CreditNoteStatus
+  taxInvoiceId    String
+  taxInvoice      TaxInvoice       @relation(fields: [taxInvoiceId], references: [id])
+  returnRequestId String?          @unique
+  returnRequest   ReturnRequest?   @relation(fields: [returnRequestId], references: [id])
+  customerId      String
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  customerName    String
+  customerTrn     String?
+  date            DateTime         @db.Date
+  reason          String
+  netTotal        Decimal          @db.Decimal(18, 2)
+  vatTotal        Decimal          @db.Decimal(18, 2)
+  total           Decimal          @db.Decimal(18, 2)
+  /// Of the total: reduced the receivable / became customer advance.
+  toReceivable    Decimal          @default(0) @db.Decimal(18, 2)
+  toAdvance       Decimal          @default(0) @db.Decimal(18, 2)
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  createdById     String?
+  createdAt       DateTime         @default(now())
+  items           CreditNoteItem[]
+
+  @@index([taxInvoiceId])
+  @@index([status])
+}
+
+model CreditNoteItem {
+  id               String         @id @default(cuid())
+  creditNoteId     String
+  creditNote       CreditNote     @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  taxInvoiceItemId String
+  taxInvoiceItem   TaxInvoiceItem @relation(fields: [taxInvoiceItemId], references: [id])
+  /// Returned SQM (return CN); zero for an adjustment.
+  sqm              Decimal        @default(0) @db.Decimal(18, 4)
+  netAmount        Decimal        @db.Decimal(18, 2)
+  vatAmount        Decimal        @db.Decimal(18, 2)
+  grossAmount      Decimal        @db.Decimal(18, 2)
+
+  @@unique([creditNoteId, lineNo])
 }
 
 /// Customer advance applied to a tax invoice: Dr Customer Advances / Cr AR (T5-07).

@@ -7,6 +7,7 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 ### Added — tax invoices behind a module switch (not deployed; switched off)
 - Tax invoices from a sales order or by converting a proforma; FTA print (PDF); money received on the proformas is applied automatically; free advances can be applied; receipts can be recorded against an invoice (TD-045).
 - Delivery notes: only for a fully paid tax invoice; partial dispatch; stock out with COGS; PDF gate pass (TD-048).
+- Sales returns (approval by Owner/Manager, receipt with condition, stock back at cost) and tax credit notes (return-based, or adjustments with approval); C7 treatment is a setting (TD-049).
 - Settings → System → Modules: tax invoicing stays off until the client confirms the VAT method (C4).
 - VAT rounding per line or per document, and the price display on printed tax invoices, are settings (TD-046, TD-047).
 

@@ -2,7 +2,7 @@
 
 Purpose: sales returns (Return Request → approval → physical receipt) and Tax Credit Notes, return-based or adjustment-based.
 
-**Implementation status:** Planned (Step 7). CN posting on fully paid invoices Blocked by C7.
+**Implementation status (19 Nov 2026):** Built behind the module switch `features.salesInvoicing` (TD-049): `erp/src/server/sales/returns.ts`, `credit-notes.ts`, `/sales/returns`, `/sales/credit-notes`, Tax Credit Note PDF. A fully paid invoice's credit becomes customer advance (C7 proposal; setting `creditNotes.paidInvoiceTreatment`). Tests: `erp/tests/returns.test.ts`, `erp/e2e/invoice-flow.spec.ts`. Sections marked "Planned" below are the spec text; the built rules are TD-049.
 
 ## 1. Business purpose
 

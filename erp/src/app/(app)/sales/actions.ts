@@ -9,6 +9,8 @@ import { closeProformaInvoice, createProformaInvoice, renewProformaInvoice } fro
 import { stockOptions, type StockOption } from "@/server/sales/queries";
 import { applyAdvanceToInvoice, createTaxInvoice } from "@/server/sales/invoices";
 import { createDeliveryNote } from "@/server/sales/delivery";
+import { createReturnRequest, decideReturnRequest, receiveReturn } from "@/server/sales/returns";
+import { createAdjustmentCreditNote, createReturnCreditNote, decideCreditNote } from "@/server/sales/credit-notes";
 
 function json(fd: FormData): unknown {
   try {
@@ -148,4 +150,71 @@ export async function createDnAction(tiId: string, _: ActionState, fd: FormData)
   revalidatePath("/sales", "layout");
   revalidatePath("/inventory", "layout");
   redirect(`/sales/deliveries/${dnId}`);
+}
+
+const prefixed = (fd: FormData, prefix: string) =>
+  [...fd.entries()].filter(([k, v]) => k.startsWith(prefix) && typeof v === "string").map(([k, v]) => ({ id: k.slice(prefix.length), value: String(v).trim() }));
+
+/** Raise a return from the TI page; fields `rr:<tiLineId>`. */
+export async function createRrAction(tiId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  let id = "";
+  const r = await runAction(async (u) => {
+    id = (await createReturnRequest(u.ctx, { taxInvoiceId: tiId, date: String(fd.get("date") ?? ""), reason: String(fd.get("reason") ?? ""), lines: prefixed(fd, "rr:").map((l) => ({ taxInvoiceItemId: l.id, sqm: l.value || "0" })) })).id;
+  });
+  if (!r.ok) return r;
+  revalidatePath("/sales", "layout");
+  redirect(`/sales/returns/${id}`);
+}
+
+export async function decideRrAction(id: string, decision: "APPROVED" | "REJECTED", _: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    const rr = await decideReturnRequest(u.ctx, id, decision, String(fd.get("note") ?? ""));
+    return `Return ${rr.number} ${decision.toLowerCase()}`;
+  });
+  if (r.ok) revalidatePath("/sales", "layout");
+  return r;
+}
+
+/** Record goods back; fields `recv:<rrLineId>` (SQM) and `cond:<rrLineId>`. */
+export async function receiveRrAction(id: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    const cond = new Map(prefixed(fd, "cond:").map((c) => [c.id, c.value]));
+    await receiveReturn(u.ctx, id, { date: String(fd.get("date") ?? ""), notes: String(fd.get("notes") ?? ""), lines: prefixed(fd, "recv:").map((l) => ({ returnRequestItemId: l.id, receivedSqm: l.value || "0", condition: cond.get(l.id) ?? "" })) });
+    return "Goods received back";
+  });
+  if (r.ok) {
+    revalidatePath("/sales", "layout");
+    revalidatePath("/inventory", "layout");
+  }
+  return r;
+}
+
+export async function returnCnAction(rrId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  let id = "";
+  const r = await runAction(async (u) => {
+    id = (await createReturnCreditNote(u.ctx, rrId, { date: String(fd.get("date") ?? "") })).id;
+  });
+  if (!r.ok) return r;
+  revalidatePath("/sales", "layout");
+  redirect(`/sales/credit-notes/${id}`);
+}
+
+/** Adjustment credit note from the TI page; fields `adj:<tiLineId>`. */
+export async function adjustmentCnAction(tiId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  let id = "";
+  const r = await runAction(async (u) => {
+    id = (await createAdjustmentCreditNote(u.ctx, { taxInvoiceId: tiId, date: String(fd.get("date") ?? ""), reason: String(fd.get("reason") ?? ""), lines: prefixed(fd, "adj:").map((l) => ({ taxInvoiceItemId: l.id, amount: l.value || "0" })) })).id;
+  });
+  if (!r.ok) return r;
+  revalidatePath("/sales", "layout");
+  redirect(`/sales/credit-notes/${id}`);
+}
+
+export async function decideCnAction(id: string, decision: "APPROVED" | "REJECTED", _: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    const cn = await decideCreditNote(u.ctx, id, decision, String(fd.get("note") ?? ""));
+    return decision === "APPROVED" ? `Credit note ${cn.number} posted` : "Credit note rejected";
+  });
+  if (r.ok) revalidatePath("/sales", "layout");
+  return r;
 }

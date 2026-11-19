@@ -16,7 +16,7 @@ export default async function NewReceiptPage({ searchParams }: { searchParams: P
   const pi = piId ? await prisma.proformaInvoice.findUnique({ where: { id: piId }, include: { salesOrder: { select: { number: true } } } }) : null;
   const ti = !pi && tiId ? await prisma.taxInvoice.findUnique({ where: { id: tiId } }) : null;
   const customers = pi || ti ? [] : await prisma.customer.findMany({ where: { active: true }, orderBy: { name: "asc" } });
-  const open = pi ? D(pi.total).minus(pi.receivedAmount) : ti ? D(ti.total).minus(ti.settledAmount) : null;
+  const open = pi ? D(pi.total).minus(pi.receivedAmount) : ti ? D(ti.total).minus(ti.settledAmount).minus(ti.creditedAmount) : null;
   const status = pi ? effectivePiStatus(pi) : null;
 
   return (

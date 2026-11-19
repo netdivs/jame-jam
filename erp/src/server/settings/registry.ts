@@ -6,11 +6,12 @@
 // Adding a setting = one entry below + reading it with getSetting() where the rule is enforced. The settings page
 // renders it from this registry.
 
-export type SettingGroup = "features" | "vat" | "purchase" | "landedCost" | "refunds";
+export type SettingGroup = "features" | "vat" | "sales" | "purchase" | "landedCost" | "refunds";
 
 export const SETTING_GROUPS: { key: SettingGroup; title: string; description: string }[] = [
   { key: "features", title: "Modules", description: "Switch whole modules on or off. Modules built on proposals that the client has not confirmed yet stay off until confirmed." },
   { key: "vat", title: "VAT", description: "How VAT is worked out and shown on sales documents." },
+  { key: "sales", title: "Sales", description: "Returns and credit notes." },
   { key: "purchase", title: "Purchasing", description: "When goods may be received and how supplier invoices and payments are checked." },
   { key: "landedCost", title: "Landed cost", description: "How import costs are treated." },
   { key: "refunds", title: "Refunds", description: "Controls on paying money back." },
@@ -52,6 +53,17 @@ export const SETTINGS = {
     options: [
       { value: "EXCLUSIVE_WITH_INCLUSIVE_REF", label: "Price excl. VAT + inclusive price as reference" },
       { value: "EXCLUSIVE_ONLY", label: "Price excl. VAT only" },
+    ],
+  },
+  "creditNotes.paidInvoiceTreatment": {
+    group: "sales",
+    kind: "enum",
+    label: "Credit note on a paid invoice",
+    help: "The part of a credit note above what is still owed on the invoice. Customer credit (C7 proposal): it stays as customer advance for the next invoice. Refund: it is also held as advance, and the credit note asks for a refund voucher to pay it back.",
+    default: "CUSTOMER_CREDIT",
+    options: [
+      { value: "CUSTOMER_CREDIT", label: "Keep as customer credit" },
+      { value: "REFUND", label: "Refund to the customer" },
     ],
   },
   "purchase.receiveBeforePayment": {

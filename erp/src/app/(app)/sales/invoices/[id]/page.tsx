@@ -6,7 +6,7 @@ import { requirePermission } from "@/server/auth";
 import { D, prisma } from "@/server/core";
 import { invoiceOpenPosition, salesInvoicingEnabled } from "@/server/sales/invoices";
 import { fmtAED, fmtDate, fmtMoney, fmtSqm, todayIso } from "@/lib/format";
-import { applyAdvanceAction, createDnAction } from "../../actions";
+import { adjustmentCnAction, applyAdvanceAction, createDnAction, createRrAction } from "../../actions";
 import { deliveryBlock } from "@/server/sales/delivery";
 import { TiPayStatus, priceModeLabel } from "../../shared";
 
@@ -22,6 +22,8 @@ export default async function TiDetail({ params }: { params: Promise<{ id: strin
       items: { orderBy: { lineNo: "asc" }, include: { product: true, taxCode: true } },
       allocations: { orderBy: { createdAt: "asc" }, include: { proformaInvoice: { select: { number: true } } } },
       deliveryNotes: { orderBy: { createdAt: "asc" } },
+      returnRequests: { orderBy: { createdAt: "asc" } },
+      creditNotes: { orderBy: { createdAt: "asc" } },
     },
   });
   if (!ti) notFound();
@@ -30,6 +32,8 @@ export default async function TiDetail({ params }: { params: Promise<{ id: strin
   const block = deliveryBlock(ti);
   const toDeliver = ti.items.map((i) => ({ item: i, open: D(i.sqm).minus(i.deliveredSqm) }));
   const undelivered = toDeliver.some((d) => d.open.gt(0));
+  const delivered = ti.items.some((i) => D(i.deliveredSqm).gt(0));
+  const creditable = ti.items.map((i) => ({ item: i, left: D(i.grossAmount).minus(i.creditedAmount) }));
 
   return (
     <>
@@ -47,7 +51,7 @@ export default async function TiDetail({ params }: { params: Promise<{ id: strin
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Total" value={fmtAED(ti.total)} hint={`Net ${fmtMoney(ti.netTotal)} + VAT ${fmtMoney(ti.vatTotal)}`} />
-        <Stat label="Paid" value={fmtAED(ti.settledAmount)} />
+        <Stat label="Paid" value={fmtAED(ti.settledAmount)} hint={D(ti.creditedAmount).gt(0) ? `Credit notes ${fmtMoney(ti.creditedAmount)}` : undefined} />
         <Stat label="Still to pay" value={fmtAED(pos.open)} hint={pos.open.gt(0) ? "The delivery note waits for full payment" : "Paid in full"} />
         <Stat label="Sales order" value={<Link href={`/sales/orders/${ti.salesOrderId}`} className="text-primary hover:underline">{ti.salesOrder.number}</Link>} hint={ti.proformaInvoice ? `From proforma ${ti.proformaInvoice.number}` : undefined} />
       </div>
@@ -176,6 +180,53 @@ export default async function TiDetail({ params }: { params: Promise<{ id: strin
             </ActionForm>
           ) : (
             <p className="text-sm text-muted">Paid in full — ready for delivery by the store.</p>
+          )}
+        </Card>
+      )}
+
+      {(ti.returnRequests.length > 0 || ti.creditNotes.length > 0 || (enabled && (has("returns.create") || has("creditNotes.create")))) && (
+        <Card title="Returns and credit notes" className="mb-5">
+          {(ti.returnRequests.length > 0 || ti.creditNotes.length > 0) && (
+            <ul className="mb-4 space-y-1 text-sm">
+              {ti.returnRequests.map((r) => (
+                <li key={r.id}>
+                  Return <Link href={`/sales/returns/${r.id}`} className="font-medium text-primary hover:underline">{r.number}</Link> · {fmtDate(r.date)} · {r.status.toLowerCase()}
+                </li>
+              ))}
+              {ti.creditNotes.map((c) => (
+                <li key={c.id}>
+                  Credit note <Link href={`/sales/credit-notes/${c.id}`} className="font-medium text-primary hover:underline">{c.number ?? "(awaiting approval)"}</Link> · {c.kind.toLowerCase()} · {fmtAED(c.total)} · {c.status.toLowerCase().replace("_", " ")}
+                </li>
+              ))}
+            </ul>
+          )}
+          {enabled && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {delivered && has("returns.create") && (
+                <ActionForm action={createRrAction.bind(null, ti.id)} className="grid gap-3">
+                  <h3 className="text-sm font-semibold">Customer returns goods</h3>
+                  <FInput id="rr-date" label="Date" name="date" type="date" required defaultValue={todayIso()} />
+                  {ti.items.map((i) => (
+                    <FInput key={i.id} id={`rr-${i.id}`} label={`Line ${i.lineNo} — SQM to return`} name={`rr:${i.id}`} inputMode="decimal" defaultValue="0" hint={`${fmtSqm(i.deliveredSqm)} SQM delivered`} />
+                  ))}
+                  <FInput id="rr-reason" label="Reason" name="reason" required placeholder="e.g. wrong shade, excess" />
+                  <div><SubmitButton variant="secondary" pendingText="Saving…">Raise return request</SubmitButton></div>
+                  <p className="text-xs text-muted">Owner or Manager approves; stock goes back only for what the store receives.</p>
+                </ActionForm>
+              )}
+              {has("creditNotes.create") && creditable.some((c) => c.left.gt(0)) && (
+                <ActionForm action={adjustmentCnAction.bind(null, ti.id)} className="grid gap-3">
+                  <h3 className="text-sm font-semibold">Adjustment credit note (no stock)</h3>
+                  <FInput id="cn-date" label="Date" name="date" type="date" required defaultValue={todayIso()} />
+                  {creditable.map(({ item, left }) => (
+                    <FInput key={item.id} id={`adj-${item.id}`} label={`Line ${item.lineNo} — amount (AED, ${ti.priceMode === "INCLUSIVE" ? "incl." : "excl."} VAT)`} name={`adj:${item.id}`} inputMode="decimal" defaultValue="0" hint={`Up to ${fmtMoney(left)} incl. VAT`} />
+                  ))}
+                  <FInput id="cn-reason" label="Reason" name="reason" required placeholder="e.g. agreed price correction" />
+                  <div><SubmitButton variant="secondary" pendingText="Saving…">Create credit note</SubmitButton></div>
+                  {!has("creditNotes.approve") && <p className="text-xs text-muted">Waits for Owner or Manager approval before it is numbered and posted.</p>}
+                </ActionForm>
+              )}
+            </div>
           )}
         </Card>
       )}

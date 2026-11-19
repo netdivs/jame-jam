@@ -34,6 +34,12 @@ export async function assertSalesInvoicing(db: Db = prisma) {
 
 export const paymentStatusOf = (settled: Dec, total: Dec) => (settled.lte(0) ? "UNPAID" : settled.gte(total) ? "PAID" : "PARTIAL");
 
+type TiAmounts = { total: Dec | string; settledAmount: Dec | string; creditedAmount?: Dec | string | null };
+/** Still to pay on an invoice: total − paid − credit notes applied to the receivable. */
+export const tiOpenAmount = (ti: TiAmounts) => D(ti.total).minus(ti.settledAmount).minus(ti.creditedAmount ?? 0);
+/** Payment status counting credit notes as settling the invoice. */
+export const tiPaymentStatus = (ti: TiAmounts) => paymentStatusOf(D(ti.settledAmount).plus(ti.creditedAmount ?? 0), D(ti.total));
+
 async function lockTi(tx: Tx, id: string) {
   const rows = await tx.$queryRaw<{ id: string }[]>`SELECT "id" FROM "TaxInvoice" WHERE "id" = ${id} FOR UPDATE`;
   if (rows.length === 0) throw new AppError("NOT_FOUND", "Tax invoice not found");
@@ -41,10 +47,10 @@ async function lockTi(tx: Tx, id: string) {
 }
 
 /** Apply advance to an invoice inside the caller's transaction. The caller has checked the cap. */
-async function allocate(tx: Tx, ctx: Ctx, ti: { id: string; number: string; customerId: string; total: Dec | string; settledAmount: Dec | string }, amount: Dec, date: Date, pi?: { id: string; number: string }) {
+async function allocate(tx: Tx, ctx: Ctx, ti: { id: string; number: string; customerId: string; total: Dec | string; settledAmount: Dec | string; creditedAmount: Dec | string }, amount: Dec, date: Date, pi?: { id: string; number: string }) {
   const alloc = await tx.invoiceAllocation.create({ data: { taxInvoiceId: ti.id, customerId: ti.customerId, proformaInvoiceId: pi?.id ?? null, date, amount, createdById: ctx.userId } });
   const settled = D(ti.settledAmount).plus(amount);
-  await tx.taxInvoice.update({ where: { id: ti.id }, data: { settledAmount: settled, paymentStatus: paymentStatusOf(settled, D(ti.total)) } });
+  await tx.taxInvoice.update({ where: { id: ti.id }, data: { settledAmount: settled, paymentStatus: tiPaymentStatus({ ...ti, settledAmount: settled }) } });
   const party = { partyType: "CUSTOMER" as const, partyId: ti.customerId };
   await postJournal(tx, ctx, {
     date,
@@ -202,7 +208,7 @@ export async function prepareReceiptForInvoice(tx: Tx, invoiceId: string, custom
   const ti = await lockTi(tx, invoiceId);
   if (customerId && customerId !== ti.customerId) throw new AppError("VALIDATION", `Tax invoice ${ti.number} is for another customer`);
   if (date < ti.date) throw new AppError("VALIDATION", `The receipt cannot be dated before ${ti.number}`);
-  const open = D(ti.total).minus(ti.settledAmount);
+  const open = tiOpenAmount(ti);
   if (amount.gt(open)) throw new AppError("VALIDATION", `${ti.number} has AED ${open.toFixed(2)} left to pay`, { fields: { amount: `At most ${open.toFixed(2)}` } });
   return {
     customerId: ti.customerId,
@@ -214,8 +220,8 @@ export async function prepareReceiptForInvoice(tx: Tx, invoiceId: string, custom
 const applySchema = z.object({ date: dateStr, amount: decimal({ gt: 0, dp: 2, label: "Amount" }) });
 
 /** What can still be applied to an invoice: its open amount and the customer's free advance. */
-export async function invoiceOpenPosition(ti: { customerId: string; total: Dec | string; settledAmount: Dec | string }, db: Db = prisma) {
-  const open = D(ti.total).minus(ti.settledAmount);
+export async function invoiceOpenPosition(ti: { customerId: string } & TiAmounts, db: Db = prisma) {
+  const open = tiOpenAmount(ti);
   const free = Dec.max((await customerAdvancePosition(ti.customerId, db)).free, 0);
   return { open, free, cap: Dec.min(open, free) };
 }

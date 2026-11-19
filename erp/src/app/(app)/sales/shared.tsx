@@ -27,6 +27,9 @@ export const PiStatus = ({ pi }: { pi: { status: PiStatusT; expiryDate: Date; re
 const PAY_TONE: Record<string, Tone> = { UNPAID: "danger", PARTIAL: "warning", PAID: "success" };
 export const TiPayStatus = ({ s }: { s: string }) => <Badge tone={PAY_TONE[s]}>{s === "PARTIAL" ? "Partly paid" : titleCase(s)}</Badge>;
 
+export const RR_TONE: Record<string, Tone> = { PENDING: "warning", APPROVED: "info", REJECTED: "danger", RECEIVED: "info", CREDITED: "success" };
+export const CN_TONE: Record<string, Tone> = { PENDING_APPROVAL: "warning", POSTED: "success", REJECTED: "danger" };
+
 export const priceModeLabel = (m: string) => (m === "INCLUSIVE" ? "VAT-inclusive" : "VAT-exclusive");
 
 /** Options for the SO editor. */

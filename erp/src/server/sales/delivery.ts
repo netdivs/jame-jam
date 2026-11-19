@@ -10,7 +10,7 @@ import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, inTx, nextDocNumber,
 import { consumeReservation, postInventoryChange } from "../inventory/stock";
 import { dateStr, decimal, optText, parse } from "../validation";
 import { refreshSoStatus } from "./orders";
-import { assertSalesInvoicing } from "./invoices";
+import { assertSalesInvoicing, tiOpenAmount } from "./invoices";
 
 export const dnSchema = z.object({
   taxInvoiceId: z.string().min(1, "Select the tax invoice"),
@@ -25,8 +25,8 @@ export const dnSchema = z.object({
 export type DnInput = z.input<typeof dnSchema>;
 
 /** Why goods cannot be released for this invoice, or null when they can (shown on the TI page). */
-export function deliveryBlock(ti: { total: Dec | string; settledAmount: Dec | string }): string | null {
-  const open = D(ti.total).minus(ti.settledAmount);
+export function deliveryBlock(ti: Parameters<typeof tiOpenAmount>[0]): string | null {
+  const open = tiOpenAmount(ti);
   return open.gt(0) ? `AED ${open.toFixed(2)} is still unpaid. Goods are released only when the tax invoice is paid in full.` : null;
 }
 

@@ -45,6 +45,11 @@ export const PERMISSIONS = {
   "taxCode.change": "Use a tax code other than standard-rated (SR) on a document line",
   "delivery.view": "View delivery notes",
   "delivery.create": "Issue delivery notes (release goods for a fully paid tax invoice)",
+  "returns.create": "Raise sales return requests",
+  "returns.approve": "Approve or reject sales returns",
+  "returns.receive": "Record returned goods received back (SQM and condition)",
+  "creditNotes.create": "Create credit notes (return-based, or adjustments that wait for approval)",
+  "creditNotes.approve": "Approve or reject adjustment credit notes",
   // Receipts & accounts
   "receipts.view": "View customer receipts and advances",
   "receipts.create": "Record customer receipts (CR / RV)",
@@ -111,6 +116,7 @@ export const ROLES: { key: string; name: string; description: string; permission
       "landedCost.edit",
       "sales.view",
       "delivery.view",
+      "creditNotes.create",
       "taxCode.change",
       "receipts.view",
       "receipts.create",
@@ -134,7 +140,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     name: "Sales Staff",
     description: "Customers, sales orders and invoices",
     // Spec §5: SO / PI / TI create/edit; no cancel, renew, extend or tax code change.
-    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "delivery.view", "receipts.view", "receipts.create", "crm.view", "crm.edit"],
+    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "delivery.view", "returns.create", "receipts.view", "receipts.create", "crm.view", "crm.edit"],
   },
   {
     key: "storekeeper",
@@ -151,6 +157,7 @@ export const ROLES: { key: string; name: string; description: string; permission
       "sales.view",
       "delivery.view",
       "delivery.create",
+      "returns.receive",
     ],
   },
 ];

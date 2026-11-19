@@ -38,6 +38,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               { href: "/sales/proformas", label: "Proforma invoices", icon: "proformas" as const },
               { href: "/sales/invoices", label: "Tax invoices", icon: "proformas" as const },
               ...(has("delivery.view") ? [{ href: "/sales/deliveries", label: "Delivery notes", icon: "proformas" as const }] : []),
+              { href: "/sales/returns", label: "Sales returns", icon: "proformas" as const },
+              { href: "/sales/credit-notes", label: "Credit notes", icon: "proformas" as const },
             ]
           : []),
         ...(has("receipts.view") ? [{ href: "/receipts", label: "Customer receipts", icon: "receipts" as const }] : []),
