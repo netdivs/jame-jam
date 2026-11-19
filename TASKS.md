@@ -96,7 +96,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T11-02 | Excel import templates with validation, error report and dry run | Med | TX-02 | DONE (19 Nov 2026, TD-037): customers, suppliers, products, opening balances, opening stock | O | — | H R |
 | T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | PARTIAL (19 Nov 2026): purchases, landed costs, SOs/PIs (active/expired/renewed), receipts, PDCs (pending/cleared/bounced/replaced, issued), petty cash, bank statement lines, CRM. Tax invoices, DNs, credit notes and a VAT period wait for C4/C7 | O | Demo runs complete workflows | H |
 | T11-04 | Mobile dashboard (spec §6) | Med | Steps 5–6 | DONE (19 Nov 2026): figures by permission — open SOs, orders this month, active proformas, bank, cash & petty cash, receivables, customer advances, payables, cheques in hand; plus follow-ups due, cheques due, stock. Invoiced sales join with T5-06 (C4) | K | — | E2E |
-| T11-05 | PDF documents (PO, GRN, SO, PI, TI, DN, CN, CR, RV, PV, PDC, statements) | High | TX-01 | PARTIAL (19 Nov 2026): PO, GRN, SO, PI, CR/RV, PV, refund, PDC, petty cash voucher, statements. TI, DN, CN wait for C4/C7 | O/K | Snapshot company details | H |
+| T11-05 | PDF documents (PO, GRN, SO, PI, TI, DN, CN, CR, RV, PV, PDC, statements) | High | TX-01 | DONE (19 Nov 2026): PO, GRN, SO, PI, TI, DN, CN, CR/RV, PV, refund, PDC, petty cash voucher, statements. TI/DN/CN follow the C4/C7 proposals (module switch) | O/K | Snapshot company details | H |
 | T11-06 | UAT, client demo, production readiness sign-off | High | all | PLANNED | user | [production-readiness.md](docs/engineering/production-readiness.md) all green | — |
 
 ## Cross-cutting
