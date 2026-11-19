@@ -374,6 +374,10 @@ User page → "Permission overrides". Vitest 113/113; Playwright 26/26.
 
 `erp/src/server/print/` (`documents.ts` builders, `pdf.tsx` renderer, `exports.ts` datasets, `xlsx.ts` writer); routes `/api/print/<type>/<id>` and `/api/export/<report>`. TD-035, TD-036. Visual check of a proforma PDF done. Not yet: TI/DN/CN PDFs (C4/C7), logo/stamp upload, Excel imports (T11-02), VAT accountant pack (T9-02, needs C4).
 
+## 6p. Excel imports (T11-02 — 19 Nov 2026)
+
+`/settings/imports`, `erp/src/server/imports/index.ts`, template route `/api/import-template/<entity>`. TD-037. Vitest 121/121; Playwright 32/32 twice. Open item: the demo-data test failed once in seven full runs and could not be reproduced; its checks now carry labels so a repeat names the failing check.
+
 ## 7. Deployment
 
 - **Server:** the aaPanel host (SSH alias `aapanel`). Code is at `/www/wwwroot/jame.netdivs.us`.

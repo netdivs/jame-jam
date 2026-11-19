@@ -20,6 +20,12 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — Excel imports for go-live (T11-02)
+- Settings → Imports: download a template, fill it, **Check** (lists every problem by row and column, saves nothing), then **Import** (saves all rows or none). Customers, suppliers, products, opening balances and opening stock (slabs / tile blocks grouped into lots). Every check and import is recorded. Migration `import_batches` (additive). TD-037.
+- Services can now join one outer transaction (bulk imports); a savepoint per row keeps one bad row from hiding the others.
+- Fixed while testing: a blank line in a CSV shifted the row numbers in error reports.
+- Tests: 4 import tests (121 in total); Playwright imports flow (32 in total).
+
 ### Added — PDF documents and Excel exports (TX-01, TX-02, T11-05 partial)
 - Libraries (user-approved): `@react-pdf/renderer` 4.9.0 and `exceljs` 4.4.0 (its `uuid` overridden to 11.1.1). TD-035, TD-036.
 - PDF button on PO, GRN, SO, proforma, receipt, refund, PDC, petty cash voucher and statement pages; PV numbers link to the payment voucher PDF. A4, company header and TRN, party snapshot, lines, totals, notes, bank details, signatures, page numbers.

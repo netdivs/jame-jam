@@ -2,7 +2,7 @@
 
 Purpose: start the system fresh with masters, opening stock (full Lot → Block → Slab with cost), open customer/supplier items, bank/cash/PDC balances and an opening trial balance — no historical migration.
 
-**Implementation status:** Opening stock Done (Step 3). Opening AR/AP invoice-wise, advances, cash/bank/petty cash, open PDCs (through the PDC register) and the opening trial balance Done (T11-01, 19 Nov 2026, TD-033): `erp/src/server/accounting/opening.ts`, `/accounts/opening`. Excel import templates Planned (T11-02).
+**Implementation status:** Opening stock Done (Step 3). Opening AR/AP invoice-wise, advances, cash/bank/petty cash, open PDCs (through the PDC register) and the opening trial balance Done (T11-01, 19 Nov 2026, TD-033): `erp/src/server/accounting/opening.ts`, `/accounts/opening`. Excel import templates Done (T11-02, TD-037): `/settings/imports` for customers, suppliers, products, opening balances and opening stock, with Check (dry run) and all-or-nothing Import.
 
 ## 1. Business purpose
 

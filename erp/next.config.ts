@@ -19,6 +19,8 @@ const csp = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Import files (T11-02) are at most 2 MB; the default Server Action body limit is 1 MB.
+  experimental: { serverActions: { bodySizeLimit: "3mb" } },
   async headers() {
     return [
       {

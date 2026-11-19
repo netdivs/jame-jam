@@ -1690,3 +1690,24 @@ model OpeningAllocation {
 
   @@index([openingItemId])
 }
+
+// ───────────────────────────── Imports (T11-02) ─────────────────────────────
+
+/// Every import check (dry run) and import (spec §9 opening_balance_batches): what, which file, the outcome.
+model ImportBatch {
+  id          String   @id @default(cuid())
+  entity      String
+  fileName    String
+  /// DRY_RUN or COMMIT
+  mode        String
+  rowsTotal   Int
+  rowsOk      Int
+  rowsFailed  Int
+  /// The error report: [{ row, column?, message }] (first 500).
+  errors      Json
+  committed   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([entity, createdAt])
+}

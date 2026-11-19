@@ -114,6 +114,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         ...(has("users.manage") ? [{ href: "/settings/roles", label: "Roles & permissions", icon: "roles" as const }] : []),
         ...(has("audit.view") ? [{ href: "/audit", label: "Audit log", icon: "audit" as const }] : []),
         ...(has("jobs.run") ? [{ href: "/settings/jobs", label: "Scheduled jobs", icon: "periods" as const }] : []),
+        ...(["customers.edit", "suppliers.edit", "products.edit", "opening.manage", "inventory.openingStock"].some(has) ? [{ href: "/settings/imports", label: "Imports", icon: "imports" as const }] : []),
       ],
     },
   ].filter((g) => g.items.length > 0) as NavGroup[];

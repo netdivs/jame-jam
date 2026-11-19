@@ -87,7 +87,8 @@ export async function deleteStatementLine(ctx: Ctx, id: string) {
 // ───────────────────────────── CSV import ─────────────────────────────
 
 /** RFC 4180-style CSV: commas, quoted fields with "" escapes, CRLF or LF. */
-export function parseCsv(text: string): string[][] {
+/** keepEmpty: keep blank lines (as []) so row numbers match the spreadsheet (imports). */
+export function parseCsv(text: string, keepEmpty = false): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let field = "";
@@ -110,6 +111,7 @@ export function parseCsv(text: string): string[][] {
       if (c === "\r" && t[i + 1] === "\n") i++;
       row.push(field);
       if (row.some((f) => f.trim() !== "")) rows.push(row);
+      else if (keepEmpty) rows.push([]);
       row = [];
       field = "";
     } else field += c;

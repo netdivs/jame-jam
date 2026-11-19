@@ -45,6 +45,7 @@ import {
   UserPlus,
   Target,
   Flag,
+  FileUp,
 } from "lucide-react";
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };
@@ -89,6 +90,7 @@ const ICONS = {
   leads: UserPlus,
   opportunities: Target,
   opening: Flag,
+  imports: FileUp,
 };
 
 function ThemeToggle() {

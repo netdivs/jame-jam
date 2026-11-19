@@ -1,4 +1,5 @@
 // Shared building blocks for every server-side service.
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 // ── Prisma client (one instance per process; survives Next.js hot reload) ──
@@ -9,8 +10,19 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 export type Tx = Prisma.TransactionClient;
 
 /** Run fn in one DB transaction. All stock + GL postings for a document must go through here. */
+// An outer transaction that services join instead of opening their own (bulk imports, T11-02). Each inTx() inside
+// it runs on the same transaction, so a whole import commits or rolls back as one.
+const outerTx = new AsyncLocalStorage<Tx>();
+
 export function inTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  const outer = outerTx.getStore();
+  if (outer) return fn(outer);
   return prisma.$transaction(fn, { timeout: 30_000, maxWait: 10_000 });
+}
+
+/** Run `fn` in one transaction that every service call inside it joins. */
+export function inOuterTx<T>(fn: (tx: Tx) => Promise<T>, timeoutMs = 300_000): Promise<T> {
+  return prisma.$transaction((tx) => outerTx.run(tx, () => fn(tx)), { timeout: timeoutMs, maxWait: 10_000 });
 }
 
 // ── Errors ──
