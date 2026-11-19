@@ -4,6 +4,14 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 
 ## [Unreleased]
 
+### Added — business policy settings (Phase 0–1, not deployed)
+- Settings → System: every business rule in one place, grouped, with help text; changes are audited. The core rules moved here from Company settings. New settings are added through a registry (TD-039); each one is off / unchanged by default.
+- Credit purchases: suppliers can be marked "gives credit" with credit days; a setting lets their goods be collected and received before payment (TD-040). Supplier invoice due dates default from credit days.
+- Supplier invoice tolerance above the PO: above it only Owner/Manager can post, with a reason (TD-041).
+- Landed cost categories can have their own allocation basis, e.g. customs duty by value (TD-042).
+- Bank charges on supplier payments can be expensed on the payment voucher instead of a landed cost bill (TD-043).
+- Cash refund limit with an Owner-only permission to go above it (TD-044).
+
 ### Added — accounts, receipts and jobs (not deployed)
 - Bank accounts (each with its own ledger account); supplier payments and customer receipts choose the bank.
 - Manual journal vouchers with reversal; trial balance, profit & loss and balance sheet.

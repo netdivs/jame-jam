@@ -2,12 +2,31 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { formObject, runAction, type ActionState } from "@/lib/action";
-import { saveSettings, saveUser, setUserPermissionOverrides } from "@/server/masters";
+import { saveBusinessRules, saveSettings, saveUser, setUserPermissionOverrides } from "@/server/masters";
+import { saveSystemSettings } from "@/server/settings";
 
 export async function saveSettingsAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const r = await runAction(async (u) => {
     await saveSettings(u.ctx, formObject(fd));
     return "Settings saved";
+  });
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
+}
+
+export async function saveBusinessRulesAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    await saveBusinessRules(u.ctx, formObject(fd));
+    return "Rules saved";
+  });
+  if (r.ok) revalidatePath("/", "layout");
+  return r;
+}
+
+export async function saveSystemSettingsAction(_: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    const { changed } = await saveSystemSettings(u.ctx, formObject(fd));
+    return changed.length ? `Saved (${changed.length} changed)` : "No changes";
   });
   if (r.ok) revalidatePath("/", "layout");
   return r;

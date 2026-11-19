@@ -11,6 +11,7 @@ import { fmtAED, fmtDate, fmtDateTime, fmtMoney, fmtSqm, titleCase, todayIso } f
 import { allocateAction, paymentAction } from "../../actions";
 import { ExpStatus, PayStatus, ShipStatus } from "../../shared";
 import { OverrideForm } from "./override-form";
+import { getSetting } from "@/server/settings";
 
 const BASIS_LABEL = { SQM: "SQM", VALUE: "Purchase value", QUANTITY: "Quantity (slabs)" } as const;
 /** Basis values in the unit of their basis: SQM (2 dp shown), AED, or a whole count. */
@@ -19,6 +20,7 @@ const fmtBasis = (b: keyof typeof BASIS_LABEL, v: Dec) => (b === "VALUE" ? fmtMo
 // Landed cost is cost data (spec §5: Owner, Manager, Accountant only), so the screen needs inventory.viewCost.
 export default async function LandedCostDetail({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("inventory.viewCost");
+  const bankChargesTreatment = await getSetting("purchase.bankChargesTreatment");
   const has = (p: string) => user.ctx.permissions.has(p);
   const { id } = await params;
   const exp = await prisma.landedCostExpense.findUnique({
@@ -286,6 +288,8 @@ export default async function LandedCostDetail({ params }: { params: Promise<{ i
               <FInput label="Amount (AED)" name="amount" inputMode="decimal" required defaultValue={outstanding.toFixed(2)} hint={`Up to ${fmtMoney(outstanding)}`} />
               <PaidFromSelect />
               <FInput label="Reference" name="reference" placeholder="TT / cheque no." />
+              {bankChargesTreatment === "EXPENSE" && <FInput label="Bank charges (AED)" name="bankCharges" inputMode="decimal" placeholder="0.00" hint="Bank payments only; expensed, on top of the amount." />}
+
               <div className="flex items-end">
                 <SubmitButton variant="secondary">Record payment</SubmitButton>
               </div>

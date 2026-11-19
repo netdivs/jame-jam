@@ -1,5 +1,6 @@
 // Goods receipt (GRN): stock in, lots → blocks → slabs created from a PO (spec §3.1.3, §3.2.3, C1).
-//  - Blocked until the PO is 100% paid and the payment verified (R6).
+//  - Blocked until the PO is 100% paid and the payment verified (R6), unless setting purchase.receiveBeforePayment
+//    allows it for this supplier (credit purchases, TD-040).
 //  - Import POs receive against a shipment that has been collected.
 //  - Received SQM can never exceed the PO line's open SQM.
 //  - Stock is valued at the PO unit price: Dr Inventory / Cr Goods Received Not Invoiced (GRNI).
@@ -8,7 +9,7 @@ import { AppError, Ctx, D, Dec, ZERO, assertCan, audit, inTx, nextDocNumber, sum
 import { postJournal } from "../accounting/gl";
 import { createLotStock, lotBodySchema } from "../inventory/lots";
 import { dateStr, optText, parse, reqText } from "../validation";
-import { RECEIVABLE, assertPaidAndVerified, lockPo, refreshPoStatus } from "./orders";
+import { RECEIVABLE, assertMayReceive, lockPo, refreshPoStatus } from "./orders";
 
 export const grnSchema = z.object({
   purchaseOrderId: reqText("Purchase order"),
@@ -32,7 +33,7 @@ export async function createGoodsReceipt(ctx: Ctx, raw: unknown) {
     if (!RECEIVABLE.includes(po.status)) {
       throw new AppError("VALIDATION", `PO ${po.number} is ${po.status.toLowerCase().replace(/_/g, " ")}; goods can be received only on an approved, open PO`);
     }
-    assertPaidAndVerified(po, "Goods receipt");
+    await assertMayReceive(tx, po, "Goods receipt");
 
     let shipment = null;
     if (input.shipmentId) {

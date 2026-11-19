@@ -130,6 +130,15 @@ enum AllocationBasis {
   QUANTITY
 }
 
+/// Business policy settings (TD-039): one row per key from the registry in src/server/settings/registry.ts.
+/// A key with no row uses the registry default, so a new setting needs no data migration.
+model SystemSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
 /// Single row (id = 1). Never hardcode these values in code.
 model CompanySetting {
   id                     Int             @id @default(1)
@@ -364,6 +373,10 @@ model Supplier {
   address       String?
   trn           String?
   notes         String?
+  /// Supplier gives credit: with setting purchase.receiveBeforePayment = CREDIT_SUPPLIERS goods may be received before payment.
+  creditAllowed Boolean                   @default(false)
+  /// Payment terms in days; fills a supplier invoice's due date when none is entered.
+  creditDays    Int?
   active        Boolean                   @default(true)
   createdAt     DateTime                  @default(now())
   updatedAt     DateTime                  @updatedAt
@@ -408,13 +421,15 @@ model Product {
 }
 
 model LandedCostCategory {
-  id        String              @id @default(cuid())
-  name      String              @unique
-  accountId String?
-  system    Boolean             @default(false)
-  active    Boolean             @default(true)
-  createdAt DateTime            @default(now())
-  expenses  LandedCostExpense[]
+  id           String              @id @default(cuid())
+  name         String              @unique
+  accountId    String?
+  /// Allocation basis for bills of this category; empty = the company default (Settings → System).
+  defaultBasis AllocationBasis?
+  system       Boolean             @default(false)
+  active       Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  expenses     LandedCostExpense[]
 }
 
 // ───────────────────────────── Inventory ─────────────────────────────
@@ -894,6 +909,8 @@ model SupplierPayment {
   toAdvance           Decimal            @default(0) @db.Decimal(18, 2)
   /// Part applied to posted supplier invoices / bills.
   toPayable           Decimal            @default(0) @db.Decimal(18, 2)
+  /// Bank charges on this payment, expensed (setting purchase.bankChargesTreatment = EXPENSE). Paid on top of amount.
+  bankCharges         Decimal            @default(0) @db.Decimal(18, 2)
   createdById         String?
   createdAt           DateTime           @default(now())
 

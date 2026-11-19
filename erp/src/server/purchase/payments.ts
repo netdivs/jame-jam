@@ -2,6 +2,8 @@
 //  - A payment against a PO first settles any posted supplier invoices of that PO; the rest is held
 //    as a supplier advance (knocked off when the invoice is posted).
 //  - A PO can never be paid beyond its total; a landed cost bill never beyond its total.
+//  - Bank charges (setting purchase.bankChargesTreatment = EXPENSE, TD-043) are paid on top of the amount:
+//    Dr Bank Charges, Cr the bank, in the same voucher. They never count toward the PO or bill.
 import { z } from "zod";
 import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, inTx, nextDocNumber, round2, toDateOnly } from "../core";
 import { postJournal } from "../accounting/gl";
@@ -10,6 +12,7 @@ import { dateStr, decimal, optText, parse } from "../validation";
 import { LIVE, lockPo, paymentStatusOf } from "./orders";
 import { lockOpeningPayable, settleOpeningInvoice } from "../accounting/opening";
 import { pendingOnBill } from "../receipts/cheques";
+import { getSetting } from "../settings";
 
 export const paymentSchema = z
   .object({
@@ -24,6 +27,7 @@ export const paymentSchema = z
     bankAccountId: optText(40),
     reference: optText(80),
     notes: optText(500),
+    bankCharges: z.union([decimal({ min: 0, dp: 2, label: "Bank charges" }), z.literal("").transform(() => undefined)]).optional(),
   })
   .refine((v) => [v.purchaseOrderId, v.landedCostExpenseId, v.openingItemId].filter(Boolean).length === 1, "A payment is for one PO, one landed cost bill or one opening invoice");
 
@@ -57,8 +61,16 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
   const input = parse(paymentSchema, raw);
   const date = toDateOnly(input.date);
   const amount = round2(input.amount);
+  const charges = round2(input.bankCharges ?? ZERO);
 
   return inTx(async (tx) => {
+    if (charges.gt(0)) {
+      if (input.mode !== "BANK") throw new AppError("VALIDATION", "Bank charges apply only to bank payments", { fields: { bankCharges: "Only for bank payments" } });
+      if ((await getSetting("purchase.bankChargesTreatment", tx)) !== "EXPENSE") {
+        throw new AppError("VALIDATION", "Bank charges are added to landed cost in this business — record them as a landed cost bill (category Bank Charges)", { fields: { bankCharges: "Record as a landed cost bill" } });
+      }
+    }
+    const chargeLines = charges.gt(0) ? [{ account: "BANK_CHARGES", debit: charges }] : [];
     const number = await nextDocNumber(tx, "PV", date);
     const cash = await cashAccountFor(tx, input.mode, input.bankAccountId);
 
@@ -99,6 +111,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
           notes: input.notes,
           toAdvance,
           toPayable,
+          bankCharges: charges,
           createdById: ctx.userId,
         },
       });
@@ -111,10 +124,11 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
         lines: [
           { account: "AP", debit: toPayable, ...party },
           { account: "SUPPLIER_ADVANCES", debit: toAdvance, ...party },
-          { account: cash.account, credit: amount },
+          { account: cash.account, credit: amount.plus(charges) },
+          ...chargeLines,
         ],
       });
-      await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, po: po.number, amount, toAdvance, toPayable } });
+      await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, po: po.number, amount, toAdvance, toPayable, bankCharges: charges } });
       return pv;
     }
 
@@ -126,7 +140,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
       }
       await settleOpeningInvoice(tx, item.id, amount);
       const pv = await tx.supplierPayment.create({
-        data: { number, supplierId: item.supplierId!, openingItemId: item.id, date, amount, mode: input.mode, bankAccountId: cash.bankAccountId, reference: input.reference, notes: input.notes, toPayable: amount, createdById: ctx.userId },
+        data: { number, supplierId: item.supplierId!, openingItemId: item.id, date, amount, mode: input.mode, bankAccountId: cash.bankAccountId, reference: input.reference, notes: input.notes, toPayable: amount, bankCharges: charges, createdById: ctx.userId },
       });
       await postJournal(tx, ctx, {
         date,
@@ -135,7 +149,8 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
         memo: `${number} — ${item.supplier!.name} — opening invoice ${item.refNo}`,
         lines: [
           { account: "AP", debit: amount, partyType: "SUPPLIER", partyId: item.supplierId! },
-          { account: cash.account, credit: amount },
+          { account: cash.account, credit: amount.plus(charges) },
+          ...chargeLines,
         ],
       });
       await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, openingInvoice: item.refNo, amount } });
@@ -165,6 +180,7 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
         reference: input.reference,
         notes: input.notes,
         toPayable: amount,
+        bankCharges: charges,
         createdById: ctx.userId,
       },
     });
@@ -175,7 +191,8 @@ export async function recordSupplierPayment(ctx: Ctx, raw: unknown) {
       memo: `${number} — ${exp.supplier.name} — bill ${exp.billNo}`,
       lines: [
         { account: "AP", debit: amount, partyType: "SUPPLIER", partyId: exp.supplierId },
-        { account: cash.account, credit: amount },
+        { account: cash.account, credit: amount.plus(charges) },
+        ...chargeLines,
       ],
     });
     await audit(tx, ctx, { action: "create", entity: "SupplierPayment", entityId: pv.id, after: { number, bill: exp.billNo, amount } });

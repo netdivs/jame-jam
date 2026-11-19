@@ -24,7 +24,8 @@ export const expenseSchema = z.object({
   date: dateStr,
   amount: decimal({ gt: 0, dp: 2, label: "Amount (excl. VAT)" }),
   taxCodeId: reqText("Tax code"),
-  allocationBasis: z.enum(["SQM", "VALUE", "QUANTITY"]).optional(),
+  /** Empty = the category's basis, else the company default (TD-042). */
+  allocationBasis: z.union([z.enum(["SQM", "VALUE", "QUANTITY"]), z.literal("").transform(() => undefined)]).optional(),
   restrictLotIds: z.array(z.string()).optional().default([]),
   notes: optText(1000),
 });
@@ -74,7 +75,7 @@ export async function recordLandedCostExpense(ctx: Ctx, raw: unknown) {
           taxCodeId: tax.id,
           vatAmount: a.vat.plus(a.rcVat),
           total,
-          allocationBasis: input.allocationBasis ?? settings.landedCostDefaultBasis,
+          allocationBasis: input.allocationBasis ?? category.defaultBasis ?? settings.landedCostDefaultBasis,
           restrictLotIds: input.restrictLotIds,
           notes: input.notes,
           createdById: ctx.userId,

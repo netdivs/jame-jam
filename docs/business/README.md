@@ -17,6 +17,7 @@ One page per business area: what the spec (v2.4) requires and what the code impl
 | [Delivery notes](delivery-notes.md) | Dispatch only after full TI payment, stock out, COGS | Planned (Step 6) |
 | [Credit notes](credit-notes.md) | Return requests, approval, return-based and adjustment CNs | Planned (Step 7); Blocked by C7 |
 | [PDC](pdc.md) | Post-dated cheques lifecycle, reminders, reports | Planned (Step 6) |
+| [Business policy settings](settings.md) | Every switchable business rule, its default and decision | Done (Phase 0–1) |
 | [Approvals](approvals.md) | PO approval, payment verification, overrides, planned approvals | Partial — purchase approvals done |
 | [Document numbering](document-numbering.md) | `PREFIX-YYNNNN`, gap-free, yearly; master codes | Done; configurable prefixes Planned |
 | [Audit trail](audit-trail.md) | Who did what, with before/after values | Done; failed-login audit and IP Planned |

@@ -108,7 +108,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     {
       label: "Administration",
       items: [
-        ...(has("settings.view") ? [{ href: "/settings/company", label: "Company settings", icon: "company" as const }] : []),
+        ...(has("settings.view") ? [{ href: "/settings/company", label: "Company settings", icon: "company" as const }, { href: "/settings/system", label: "System settings", icon: "company" as const }] : []),
         ...(has("settings.view") ? [{ href: "/settings/tax-codes", label: "Tax codes", icon: "tax" as const }] : []),
         ...(has("users.manage") ? [{ href: "/settings/users", label: "Users", icon: "users" as const }] : []),
         ...(has("users.manage") ? [{ href: "/settings/roles", label: "Roles & permissions", icon: "roles" as const }] : []),

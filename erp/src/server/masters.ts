@@ -1,7 +1,7 @@
 // Master data services: customers, suppliers, products, warehouses, landed cost categories, settings, users.
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { AppError, Ctx, assertCan, audit, inTx, nextMasterCode, rethrowUnique } from "./core";
+import { AppError, Ctx, assertCan, audit, can, inTx, nextMasterCode, rethrowUnique } from "./core";
 import { decimal, optText, parse, reqText, trn } from "./validation";
 
 const bool = z
@@ -61,21 +61,39 @@ export const supplierSchema = z.object({
   trn,
   notes: optText(1000),
   active: bool,
+  creditTerms: z.string().optional(),
+  creditAllowed: bool,
+  creditDays: z.union([z.literal("").transform(() => null), z.null(), z.coerce.number().int("Whole days").min(0, "At least 0").max(365, "At most 365")]).optional(),
 });
+
+/**
+ * Credit terms change when goods may be received before payment, so only a user who can approve POs may set them
+ * (TD-040). A form without the credit fields (disabled for other users) leaves them unchanged.
+ */
+function creditTerms(ctx: Ctx, raw: unknown, data: { creditAllowed: boolean; creditDays?: number | null }, before: { creditAllowed: boolean; creditDays: number | null } | null) {
+  // Forms send creditTerms=1 with the fields (an unticked checkbox sends nothing); API callers may send creditAllowed.
+  const sent = typeof raw === "object" && raw !== null && ("creditTerms" in raw || "creditAllowed" in raw);
+  const next = sent ? { creditAllowed: data.creditAllowed, creditDays: data.creditDays ?? null } : { creditAllowed: before?.creditAllowed ?? false, creditDays: before?.creditDays ?? null };
+  const changed = next.creditAllowed !== (before?.creditAllowed ?? false) || next.creditDays !== (before?.creditDays ?? null);
+  if (changed && !can(ctx, "purchase.approve")) throw new AppError("FORBIDDEN", "Only a user who can approve purchase orders can change a supplier's credit terms");
+  return next;
+}
 
 export async function saveSupplier(ctx: Ctx, id: string | null, raw: unknown) {
   assertCan(ctx, "suppliers.edit");
-  const data = parse(supplierSchema, raw);
+  const { creditTerms: _t, creditAllowed: _c, creditDays: _d, ...data } = parse(supplierSchema, raw);
   return inTx(async (tx) => {
     try {
       if (id) {
         const before = await tx.supplier.findUniqueOrThrow({ where: { id } });
-        const after = await tx.supplier.update({ where: { id }, data: { ...data, code: data.code ?? before.code } });
+        const credit = creditTerms(ctx, raw, { creditAllowed: _c, creditDays: _d }, before);
+        const after = await tx.supplier.update({ where: { id }, data: { ...data, ...credit, code: data.code ?? before.code } });
         await audit(tx, ctx, { action: "update", entity: "Supplier", entityId: id, before, after });
         return after;
       }
+      const credit = creditTerms(ctx, raw, { creditAllowed: _c, creditDays: _d }, null);
       const code = data.code ?? (await nextMasterCode(tx, "SUP"));
-      const after = await tx.supplier.create({ data: { ...data, code, active: true } });
+      const after = await tx.supplier.create({ data: { ...data, ...credit, code, active: true } });
       await audit(tx, ctx, { action: "create", entity: "Supplier", entityId: after.id, after });
       return after;
     } catch (e) {
@@ -153,7 +171,12 @@ export async function saveWarehouse(ctx: Ctx, id: string | null, raw: unknown) {
 }
 
 // ── Landed cost categories ──
-export const landedCostCategorySchema = z.object({ name: reqText("Name", 80), active: bool });
+export const landedCostCategorySchema = z.object({
+  name: reqText("Name", 80),
+  active: bool,
+  /** Allocation basis for this category's bills; "" = the company default (TD-042). */
+  defaultBasis: z.union([z.enum(["SQM", "VALUE", "QUANTITY"]), z.literal("").transform(() => null)]).optional().transform((v) => v ?? null),
+});
 
 export async function saveLandedCostCategory(ctx: Ctx, id: string | null, raw: unknown) {
   assertCan(ctx, "landedCostCategories.edit");
@@ -189,6 +212,10 @@ export const settingsSchema = z.object({
   bankAccountNo: optText(40),
   iban: optText(40),
   swift: optText(20),
+});
+
+// Core business rules kept as CompanySetting columns (shown on Settings → System with the policy registry).
+export const rulesSchema = z.object({
   vatRate: decimal({ min: 0, max: 100, dp: 2, label: "VAT rate" }),
   defaultPriceMode: z.enum(["INCLUSIVE", "EXCLUSIVE"]),
   piValidityDays: z.coerce.number().int().min(1, "PI validity must be at least 1 day").max(365),
@@ -198,6 +225,18 @@ export const settingsSchema = z.object({
   landedCostDefaultBasis: z.enum(["SQM", "VALUE", "QUANTITY"]),
   pdcReminderDays: z.coerce.number().int().min(0).max(90),
 });
+
+export async function saveBusinessRules(ctx: Ctx, raw: unknown) {
+  assertCan(ctx, "settings.edit");
+  const data = parse(rulesSchema, raw);
+  return inTx(async (tx) => {
+    const before = await tx.companySetting.findUniqueOrThrow({ where: { id: 1 } });
+    const after = await tx.companySetting.update({ where: { id: 1 }, data });
+    const pick = (s: typeof before) => Object.fromEntries(Object.keys(data).map((k) => [k, s[k as keyof typeof s]]));
+    await audit(tx, ctx, { action: "update", entity: "CompanySetting", entityId: "1", before: pick(before), after: pick(after) });
+    return after;
+  });
+}
 
 export async function saveSettings(ctx: Ctx, raw: unknown) {
   assertCan(ctx, "settings.edit");

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, inTx, nextDocNumber, round2, round4, sum, toDateOnly } from "../core";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
 import { isStandardPurchaseCode, requireTaxReason } from "../tax-rules";
+import { getSetting, type SettingValue } from "../settings";
 
 // ───────────────────────────── Shared helpers ─────────────────────────────
 
@@ -46,6 +47,23 @@ export function assertPaidAndVerified(po: { number: string; paidAmount: Prisma.D
   if (!po.paymentVerifiedAt) {
     throw new AppError("VALIDATION", `${what} is blocked: the 100% payment on PO ${po.number} has not been verified yet.`);
   }
+}
+
+/**
+ * Does this PO need the 100% verified payment before collection and GRN? Setting purchase.receiveBeforePayment:
+ * NEVER (default, C1) → always; CREDIT_SUPPLIERS → unless the supplier has credit allowed; ALWAYS → never.
+ */
+export function needsPaymentBeforeReceipt(po: { supplier: { creditAllowed: boolean } }, policy: SettingValue<"purchase.receiveBeforePayment">) {
+  return policy === "NEVER" || (policy === "CREDIT_SUPPLIERS" && !po.supplier.creditAllowed);
+}
+
+/** The collection / GRN gate, applying the policy setting. */
+export async function assertMayReceive(
+  tx: Tx,
+  po: { number: string; paidAmount: Prisma.Decimal; total: Prisma.Decimal; paymentVerifiedAt: Date | null; supplier: { creditAllowed: boolean } },
+  what: string,
+) {
+  if (needsPaymentBeforeReceipt(po, await getSetting("purchase.receiveBeforePayment", tx))) assertPaidAndVerified(po, what);
 }
 
 /** Recompute the goods status from line quantities (and close when fully invoiced). */
@@ -297,7 +315,7 @@ export async function setShipmentStatus(ctx: Ctx, shipmentId: string, status: Sh
     if (SHIPMENT_FLOW.indexOf(status) <= SHIPMENT_FLOW.indexOf(sh.status)) {
       throw new AppError("VALIDATION", `Shipment ${sh.number} is already ${sh.status.toLowerCase().replace(/_/g, " ")}`);
     }
-    if (status === "COLLECTED") assertPaidAndVerified(po, "Goods collection");
+    if (status === "COLLECTED") await assertMayReceive(tx, po, "Goods collection");
     const after = await tx.shipment.update({
       where: { id: shipmentId },
       data: { status, ...(status === "COLLECTED" ? { collectedAt: new Date() } : {}) },

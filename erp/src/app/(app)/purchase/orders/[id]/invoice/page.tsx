@@ -3,6 +3,7 @@ import { Card, LinkButton, PageHeader } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { D, prisma } from "@/server/core";
 import { todayIso } from "@/lib/format";
+import { getSetting } from "@/server/settings";
 import { InvoiceForm } from "./invoice-form";
 
 export const metadata = { title: "Supplier invoice" };
@@ -42,6 +43,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         taxes={taxes.map((t) => ({ value: t.id, label: `${t.code} — ${t.name}`, rate: Number(t.rate), type: t.type }))}
         defaultDate={todayIso()}
         importSupplier={po.supplier.supplierType === "IMPORT"}
+        creditDays={po.supplier.creditDays}
+        overPoTolerance={await getSetting("purchase.invoiceOverPoTolerancePct")}
       />
     </>
   );
