@@ -46,3 +46,10 @@ export const todayIso = () => {
 };
 export const titleCase = (s: string) =>
   s.toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+/** Value for an <input type="datetime-local"> in the server's local time, `minutes` from now (rounded to 5 min). */
+export const localDateTimeInput = (minutes = 0) => {
+  const n = new Date(Date.now() + minutes * 60_000);
+  n.setMinutes(Math.round(n.getMinutes() / 5) * 5, 0, 0);
+  const p = (x: number) => String(x).padStart(2, "0");
+  return `${n.getFullYear()}-${p(n.getMonth() + 1)}-${p(n.getDate())}T${p(n.getHours())}:${p(n.getMinutes())}`;
+};

@@ -53,7 +53,7 @@ export async function saveCustomer(ctx: Ctx, id: string | null, raw: unknown) {
 export const supplierSchema = z.object({
   code: optText(20),
   name: reqText("Supplier name", 160),
-  supplierType: z.enum(["LOCAL", "IMPORT"], { errorMap: () => ({ message: "Choose local or import" }) }),
+  supplierType: z.enum(["LOCAL", "IMPORT"], { error: "Choose local or import" }),
   contactPerson: optText(100),
   mobile: optText(30),
   email: z.union([z.string().trim().email("Invalid email"), z.literal("")]).optional().transform((v) => v || undefined),
@@ -88,7 +88,7 @@ export async function saveSupplier(ctx: Ctx, id: string | null, raw: unknown) {
 export const productSchema = z.object({
   itemCode: reqText("Item code", 30).transform((v) => v.toUpperCase()),
   name: reqText("Product name", 160),
-  type: z.enum(["TILE", "SLAB"], { errorMap: () => ({ message: "Choose tile or slab" }) }),
+  type: z.enum(["TILE", "SLAB"], { error: "Choose tile or slab" }),
   category: optText(80),
   stoneType: optText(80),
   finish: optText(80),
@@ -265,5 +265,36 @@ export async function saveUser(ctx: Ctx, id: string | null, raw: unknown) {
     } catch (e) {
       rethrowUnique(e, "A user with this email already exists");
     }
+  });
+}
+
+// ── Per-user permission overrides (T1-01, audit F17) ──
+/**
+ * Replace a user's grants and revokes on top of their role. Values per permission key: "role" (no override),
+ * "grant" or "revoke". Effective at the user's next request (permissions are loaded per request).
+ * Nobody changes their own overrides (no self-escalation, no locking yourself out).
+ */
+export async function setUserPermissionOverrides(ctx: Ctx, userId: string, raw: Record<string, string>) {
+  assertCan(ctx, "users.manage");
+  if (userId === ctx.userId) throw new AppError("VALIDATION", "You cannot change your own permissions; ask another administrator");
+  const { PERMISSIONS } = await import("./rbac");
+  const valid = new Set(Object.keys(PERMISSIONS));
+  const wanted: { permissionKey: string; grant: boolean }[] = [];
+  for (const [key, v] of Object.entries(raw)) {
+    if (!valid.has(key)) throw new AppError("VALIDATION", `Unknown permission: ${key}`);
+    if (v === "grant" || v === "revoke") wanted.push({ permissionKey: key, grant: v === "grant" });
+    else if (v !== "role" && v !== "") throw new AppError("VALIDATION", `Choose role, grant or revoke for ${key}`);
+  }
+  return inTx(async (tx) => {
+    const user = await tx.user.findUnique({ where: { id: userId }, include: { role: { include: { permissions: true } }, overrides: true } });
+    if (!user) throw new AppError("NOT_FOUND", "User not found");
+    // Overrides that match the role change nothing; keep only real differences.
+    const fromRole = new Set(user.role.permissions.map((p) => p.permissionKey));
+    const effective = wanted.filter((w) => w.grant !== fromRole.has(w.permissionKey));
+    const before = user.overrides.map((o) => ({ key: o.permissionKey, grant: o.grant }));
+    await tx.userPermission.deleteMany({ where: { userId } });
+    if (effective.length) await tx.userPermission.createMany({ data: effective.map((w) => ({ userId, ...w })) });
+    await audit(tx, ctx, { action: "permissions", entity: "User", entityId: userId, before: { overrides: before }, after: { overrides: effective.map((w) => ({ key: w.permissionKey, grant: w.grant })) } });
+    return effective;
   });
 }

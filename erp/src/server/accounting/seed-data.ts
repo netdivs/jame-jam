@@ -31,6 +31,7 @@ export const CHART_OF_ACCOUNTS: Acc[] = [
         { code: "2110", name: "Accounts Payable", type: "LIABILITY", key: "AP" },
         { code: "2120", name: "PDC Payable", type: "LIABILITY", key: "PDC_PAYABLE" },
         { code: "2130", name: "Customer Advances", type: "LIABILITY", key: "CUSTOMER_ADVANCES" },
+        { code: "2140", name: "Goods Received Not Invoiced", type: "LIABILITY", key: "GRNI" },
       ] },
       { code: "2200", name: "Tax Liabilities", type: "LIABILITY", children: [
         { code: "2210", name: "VAT Output", type: "LIABILITY", key: "VAT_OUTPUT" },
@@ -76,6 +77,14 @@ export const TAX_CODES: { code: string; name: string; type: TaxType; rate: numbe
   { code: "EX", name: "Exempt", type: "EX", rate: 0 },
   { code: "OS", name: "Out of scope", type: "OS", rate: 0 },
   { code: "RC", name: "Reverse charge 5% (imports)", type: "RC", rate: 5, output: "VAT_OUTPUT", input: "VAT_INPUT" },
+];
+
+/** Default petty cash expense categories (T8-04) → expense account systemKey. Users can add more. */
+export const EXPENSE_CATEGORIES: { name: string; key: string }[] = [
+  { name: "General & office", key: "GENERAL_EXPENSE" },
+  { name: "Local delivery & transport", key: "DELIVERY_EXPENSE" },
+  { name: "Utilities", key: "UTILITIES" },
+  { name: "Bank charges", key: "BANK_CHARGES" },
 ];
 
 /** Approved baseline §3.3 — users can add more. */

@@ -29,7 +29,9 @@ export async function assertPeriodOpen(tx: Tx, date: Date): Promise<void> {
 
 export type JournalLineInput = {
   /** Account systemKey (e.g. "INVENTORY"). Posting code never refers to account codes or names. */
-  account: string;
+  account?: string;
+  /** Only for manual journal vouchers, where the user picks the account. */
+  accountId?: string;
   debit?: Dec;
   credit?: Dec;
   partyType?: "CUSTOMER" | "SUPPLIER";
@@ -60,12 +62,18 @@ export async function postJournal(
     throw new AppError("UNBALANCED", `Journal is not balanced (Dr ${totalDr} / Cr ${totalCr})`);
   }
 
-  const keys = [...new Set(lines.map((l) => l.account))];
-  const accounts = await tx.account.findMany({ where: { systemKey: { in: keys } } });
-  const byKey = new Map(accounts.map((a) => [a.systemKey!, a]));
-  for (const k of keys) {
-    const a = byKey.get(k);
-    if (!a) throw new AppError("VALIDATION", `Account not configured: ${k}`);
+  for (const l of lines) {
+    if (Boolean(l.account) === Boolean(l.accountId)) throw new AppError("VALIDATION", "Each journal line needs exactly one account");
+  }
+  const keys = [...new Set(lines.flatMap((l) => (l.account ? [l.account] : [])))];
+  const ids = [...new Set(lines.flatMap((l) => (l.accountId ? [l.accountId] : [])))];
+  const accounts = await tx.account.findMany({ where: { OR: [{ systemKey: { in: keys } }, { id: { in: ids } }] } });
+  const byKey = new Map(accounts.filter((a) => a.systemKey).map((a) => [a.systemKey!, a]));
+  const byId = new Map(accounts.map((a) => [a.id, a]));
+  const resolve = (l: { account?: string; accountId?: string }) => (l.account ? byKey.get(l.account) : byId.get(l.accountId!));
+  for (const l of lines) {
+    const a = resolve(l);
+    if (!a) throw new AppError("VALIDATION", `Account not configured: ${l.account ?? l.accountId}`);
     if (a.isGroup || !a.active) throw new AppError("VALIDATION", `Account ${a.code} cannot be posted to`);
   }
 
@@ -82,7 +90,7 @@ export async function postJournal(
       createdById: ctx.userId,
       lines: {
         create: lines.map((l) => ({
-          accountId: byKey.get(l.account)!.id,
+          accountId: resolve(l)!.id,
           debit: l.debit,
           credit: l.credit,
           partyType: l.partyType,

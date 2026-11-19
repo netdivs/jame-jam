@@ -2,26 +2,44 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
 import { AppError, Ctx, audit, prisma } from "./core";
 import { loadPermissions } from "./rbac";
+import { assertNotThrottled, recordFailedLogin } from "./login-throttle";
 
 export const SESSION_COOKIE = "jj_session";
 const ttlHours = () => Number(process.env.SESSION_TTL_HOURS ?? 12);
 const hashToken = (t: string) => createHash("sha256").update(t).digest("hex");
 
-export async function login(email: string, password: string): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+/**
+ * Client IP. The app listens on 127.0.0.1 behind nginx and Cloudflare, so the forwarding headers are set by them:
+ * Cloudflare's cf-connecting-ip first, then the first x-forwarded-for hop, then x-real-ip.
+ */
+export async function clientIp(): Promise<string | null> {
+  const h = await headers();
+  const ip = h.get("cf-connecting-ip") ?? h.get("x-forwarded-for")?.split(",")[0] ?? h.get("x-real-ip");
+  return ip?.trim().slice(0, 64) || null;
+}
+
+export async function login(rawEmail: string, password: string): Promise<void> {
+  const email = rawEmail.trim().toLowerCase().slice(0, 200);
+  const ip = await clientIp();
+  await assertNotThrottled(email, ip);
+  const user = await prisma.user.findUnique({ where: { email } });
   const ok = user && user.active && (await bcrypt.compare(password, user.passwordHash));
-  if (!user || !ok) throw new AppError("UNAUTHENTICATED", "Invalid email or password");
+  if (!user || !ok) {
+    await recordFailedLogin(email, ip, user);
+    throw new AppError("UNAUTHENTICATED", "Invalid email or password");
+  }
 
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + ttlHours() * 3600_000);
   await prisma.$transaction(async (tx) => {
     await tx.session.create({ data: { id: hashToken(token), userId: user.id, expiresAt } });
-    await audit(tx, { userId: user.id, permissions: new Set() }, { action: "login", entity: "User", entityId: user.id });
+    await tx.loginAttempt.create({ data: { email, ip, success: true } });
+    await audit(tx, { userId: user.id, permissions: new Set(), ip }, { action: "login", entity: "User", entityId: user.id });
   });
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
@@ -35,7 +53,16 @@ export async function login(email: string, password: string): Promise<void> {
 export async function logout(): Promise<void> {
   const jar = await cookies();
   const token = jar.get(SESSION_COOKIE)?.value;
-  if (token) await prisma.session.deleteMany({ where: { id: hashToken(token) } });
+  if (token) {
+    const session = await prisma.session.findUnique({ where: { id: hashToken(token) } });
+    if (session) {
+      const ip = await clientIp();
+      await prisma.$transaction(async (tx) => {
+        await tx.session.deleteMany({ where: { id: session.id } });
+        await audit(tx, { userId: session.userId, permissions: new Set(), ip }, { action: "logout", entity: "User", entityId: session.userId });
+      });
+    }
+  }
   jar.delete(SESSION_COOKIE);
 }
 
@@ -56,7 +83,7 @@ export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
     name: session.user.name,
     email: session.user.email,
     roleName: session.user.role.name,
-    ctx: { userId: session.user.id, permissions },
+    ctx: { userId: session.user.id, permissions, ip: await clientIp() },
   };
 });
 

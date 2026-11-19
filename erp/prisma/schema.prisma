@@ -1,6 +1,7 @@
 // Jame Jam ERP — database schema
 // Spec: requirements/jame_jam_erp_system_technical_specification.md (v2.4)
-// Scope so far: Step 1 (foundation), Step 2 (masters), Step 3 (inventory core).
+// Scope so far: Step 1 (foundation), Step 2 (masters), Step 3 (inventory core), Step 4 (purchase & import),
+// Step 5 (sales orders and proforma invoices; tax invoices follow with T5-06).
 // Money = Decimal(18,2). SQM = Decimal(18,4). Never use Float for either.
 
 generator client {
@@ -15,18 +16,23 @@ datasource db {
 // ───────────────────────────── Core / Admin ─────────────────────────────
 
 model User {
-  id           String           @id @default(cuid())
-  name         String
-  email        String           @unique
-  passwordHash String
-  roleId       String
-  role         Role             @relation(fields: [roleId], references: [id])
-  active       Boolean          @default(true)
-  createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  sessions     Session[]
-  overrides    UserPermission[]
-  auditLogs    AuditLog[]
+  id             String             @id @default(cuid())
+  name           String
+  email          String             @unique
+  passwordHash   String
+  roleId         String
+  role           Role               @relation(fields: [roleId], references: [id])
+  active         Boolean            @default(true)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  sessions       Session[]
+  overrides      UserPermission[]
+  auditLogs      AuditLog[]
+  pettyCashBoxes PettyCashAccount[]
+  leads          Lead[]             @relation("LeadAssignee")
+  opportunities  Opportunity[]      @relation("OpportunityOwner")
+  interactions   CrmInteraction[]   @relation("InteractionUser")
+  followUps      CrmFollowUp[]      @relation("FollowUpAssignee")
 }
 
 model Role {
@@ -87,10 +93,24 @@ model AuditLog {
   before    Json?
   after     Json?
   meta      Json?
+  /// Client IP of the request that caused the change (TS-02); null for scheduled jobs and seeds.
+  ip        String?
   createdAt DateTime @default(now())
 
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+/// Every sign-in attempt, for the login rate limit (TS-02). Old rows are removed by the session-cleanup job.
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String?
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
 }
 
 enum PriceMode {
@@ -158,19 +178,49 @@ enum AccountType {
 }
 
 model Account {
-  id        String        @id @default(cuid())
-  code      String        @unique
-  name      String
-  type      AccountType
-  parentId  String?
-  parent    Account?      @relation("AccountTree", fields: [parentId], references: [id])
-  children  Account[]     @relation("AccountTree")
-  isGroup   Boolean       @default(false)
+  id                String            @id @default(cuid())
+  code              String            @unique
+  name              String
+  type              AccountType
+  parentId          String?
+  parent            Account?          @relation("AccountTree", fields: [parentId], references: [id])
+  children          Account[]         @relation("AccountTree")
+  isGroup           Boolean           @default(false)
   /// Stable key used by posting code (e.g. INVENTORY, AR, VAT_OUTPUT). Never post by code/name.
-  systemKey String?       @unique
-  active    Boolean       @default(true)
-  lines     JournalLine[]
-  createdAt DateTime      @default(now())
+  systemKey         String?           @unique
+  active            Boolean           @default(true)
+  lines             JournalLine[]
+  createdAt         DateTime          @default(now())
+  bank              BankAccount?
+  pettyCash         PettyCashAccount?
+  expenseCategories ExpenseCategory[]
+  openingItems      OpeningItem[]
+}
+
+/// A company bank account (spec §3.4, T8-03). Each one has its own GL account under Cash & Bank.
+model BankAccount {
+  id              String                 @id @default(cuid())
+  code            String                 @unique
+  name            String
+  bankName        String?
+  branch          String?
+  accountNo       String?
+  iban            String?
+  swift           String?
+  accountId       String                 @unique
+  account         Account                @relation(fields: [accountId], references: [id])
+  /// Used when a bank payment does not name a bank account.
+  isDefault       Boolean                @default(false)
+  active          Boolean                @default(true)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  supplierPay     SupplierPayment[]
+  receipts        CustomerReceipt[]
+  cheques         Cheque[]
+  refunds         Refund[]
+  pettyTopUps     PettyCashTransaction[]
+  statementLines  BankStatementLine[]
+  reconciliations BankReconciliation[]
 }
 
 model FiscalYear {
@@ -219,6 +269,7 @@ model JournalLine {
   partyType String? // CUSTOMER, SUPPLIER
   partyId   String?
   memo      String?
+  bankMatch BankMatch?
 
   @@index([accountId])
   @@index([partyType, partyId])
@@ -233,15 +284,21 @@ enum TaxType {
 }
 
 model TaxCode {
-  id              String    @id @default(cuid())
-  code            String    @unique
+  id              String                 @id @default(cuid())
+  code            String                 @unique
   name            String
   type            TaxType
-  rate            Decimal   @db.Decimal(5, 2)
+  rate            Decimal                @db.Decimal(5, 2)
   outputAccountId String?
   inputAccountId  String?
-  active          Boolean   @default(true)
+  active          Boolean                @default(true)
   products        Product[]
+  poItems         PurchaseOrderItem[]
+  invoiceItems    SupplierInvoiceItem[]
+  expenses        LandedCostExpense[]
+  soItems         SalesOrderItem[]
+  piItems         ProformaInvoiceItem[]
+  pettyCash       PettyCashTransaction[]
 }
 
 // ───────────────────────────── Masters ─────────────────────────────
@@ -256,24 +313,39 @@ model Warehouse {
   lots      Lot[]
   slabs     Slab[]
   balances  StockBalance[]
+  receipts  GoodsReceipt[]
 }
 
 model Customer {
-  id               String   @id @default(cuid())
-  code             String   @unique
+  id               String            @id @default(cuid())
+  code             String            @unique
   name             String
   contactPerson    String?
   mobile           String?
   email            String?
   address          String?
   trn              String?
-  creditEnabled    Boolean  @default(false)
-  creditLimit      Decimal  @default(0) @db.Decimal(18, 2)
-  paymentTermsDays Int      @default(0)
+  creditEnabled    Boolean           @default(false)
+  creditLimit      Decimal           @default(0) @db.Decimal(18, 2)
+  paymentTermsDays Int               @default(0)
   notes            String?
-  active           Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  active           Boolean           @default(true)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  salesOrders      SalesOrder[]
+  proformas        ProformaInvoice[]
+  receipts         CustomerReceipt[]
+  cheques          Cheque[]
+  refunds          Refund[]
+  /// The lead this customer was converted from (CRM).
+  leadId           String?           @unique
+  lead             Lead?             @relation("LeadCustomer", fields: [leadId], references: [id])
+  contacts         CustomerContact[]
+  convertedLeads   Lead[]            @relation("LeadConvertedTo")
+  opportunities    Opportunity[]
+  interactions     CrmInteraction[]
+  followUps        CrmFollowUp[]
+  openingItems     OpeningItem[]
 }
 
 enum SupplierType {
@@ -282,20 +354,28 @@ enum SupplierType {
 }
 
 model Supplier {
-  id            String       @id @default(cuid())
-  code          String       @unique
+  id            String                    @id @default(cuid())
+  code          String                    @unique
   name          String
-  supplierType  SupplierType @default(LOCAL)
+  supplierType  SupplierType              @default(LOCAL)
   contactPerson String?
   mobile        String?
   email         String?
   address       String?
   trn           String?
   notes         String?
-  active        Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  active        Boolean                   @default(true)
+  createdAt     DateTime                  @default(now())
+  updatedAt     DateTime                  @updatedAt
   lots          Lot[]
+  orders        PurchaseOrder[]
+  invoices      SupplierInvoice[]
+  payments      SupplierPayment[]
+  expenses      LandedCostExpense[]
+  cheques       Cheque[]
+  refunds       Refund[]
+  advanceMoves  SupplierAdvanceTransfer[]
+  openingItems  OpeningItem[]
 }
 
 enum ProductType {
@@ -304,32 +384,37 @@ enum ProductType {
 }
 
 model Product {
-  id               String         @id @default(cuid())
-  itemCode         String         @unique
+  id               String                @id @default(cuid())
+  itemCode         String                @unique
   name             String
   type             ProductType
   category         String?
   stoneType        String?
   finish           String?
   size             String? // tiles, e.g. "60x120"
-  thicknessMm      Decimal?       @db.Decimal(8, 2)
+  thicknessMm      Decimal?              @db.Decimal(8, 2)
   defaultTaxCodeId String?
-  defaultTaxCode   TaxCode?       @relation(fields: [defaultTaxCodeId], references: [id])
-  active           Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+  defaultTaxCode   TaxCode?              @relation(fields: [defaultTaxCodeId], references: [id])
+  active           Boolean               @default(true)
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
   lots             Lot[]
   slabs            Slab[]
   balances         StockBalance[]
+  poItems          PurchaseOrderItem[]
+  soItems          SalesOrderItem[]
+  piItems          ProformaInvoiceItem[]
+  leads            Lead[]
 }
 
 model LandedCostCategory {
-  id        String   @id @default(cuid())
-  name      String   @unique
+  id        String              @id @default(cuid())
+  name      String              @unique
   accountId String?
-  system    Boolean  @default(false)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
+  system    Boolean             @default(false)
+  active    Boolean             @default(true)
+  createdAt DateTime            @default(now())
+  expenses  LandedCostExpense[]
 }
 
 // ───────────────────────────── Inventory ─────────────────────────────
@@ -341,22 +426,30 @@ enum LotSource {
 }
 
 model Lot {
-  id              String           @id @default(cuid())
-  lotNo           String           @unique
+  id              String                 @id @default(cuid())
+  lotNo           String                 @unique
   productId       String
-  product         Product          @relation(fields: [productId], references: [id])
+  product         Product                @relation(fields: [productId], references: [id])
   supplierId      String?
-  supplier        Supplier?        @relation(fields: [supplierId], references: [id])
+  supplier        Supplier?              @relation(fields: [supplierId], references: [id])
   warehouseId     String
-  warehouse       Warehouse        @relation(fields: [warehouseId], references: [id])
+  warehouse       Warehouse              @relation(fields: [warehouseId], references: [id])
   source          LotSource
-  receivedDate    DateTime         @db.Date
-  totalSqm        Decimal          @db.Decimal(18, 4)
-  landedCostTotal Decimal          @db.Decimal(18, 2)
-  costPerSqm      Decimal          @db.Decimal(18, 4)
+  receivedDate    DateTime               @db.Date
+  totalSqm        Decimal                @db.Decimal(18, 4)
+  landedCostTotal Decimal                @db.Decimal(18, 2)
+  costPerSqm      Decimal                @db.Decimal(18, 4)
   remarks         String?
+  /// Set for lots created by a goods receipt (GRN).
+  purchaseOrderId String?
+  purchaseOrder   PurchaseOrder?         @relation(fields: [purchaseOrderId], references: [id])
+  poItemId        String?
+  poItem          PurchaseOrderItem?     @relation(fields: [poItemId], references: [id])
+  goodsReceiptId  String?
+  goodsReceipt    GoodsReceipt?          @relation(fields: [goodsReceiptId], references: [id])
   createdById     String?
-  createdAt       DateTime         @default(now())
+  createdAt       DateTime               @default(now())
+  allocations     LandedCostAllocation[]
   blocks          Block[]
   slabs           Slab[]
   balances        StockBalance[]
@@ -444,6 +537,7 @@ model StockBalance {
   updatedAt    DateTime           @updatedAt
   reservations StockReservation[]
   movements    StockMovement[]
+  soItems      SalesOrderItem[]
 
   @@index([productId])
   @@index([lotId])
@@ -459,6 +553,8 @@ enum MovementType {
   WASTAGE
   ADJUSTMENT_IN
   ADJUSTMENT_OUT
+  /// Value-only change (sqm = 0): landed cost allocation or supplier invoice price variance.
+  COST_ADJUSTMENT
 }
 
 /// Stock ledger. Stock is never edited directly; every change is a row here.
@@ -557,4 +653,1061 @@ model LotCostHistory {
   createdAt       DateTime @default(now())
 
   @@index([lotId])
+}
+
+// ───────────────────────────── Purchase & Import (Step 4) ─────────────────────────────
+// Flow (C1, proposed and implemented): PO → approval → shipment (imports) → 100% payment, verified
+// → collection → GRN (stock in, lots created) → supplier invoice → landed cost allocation.
+
+enum PoStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  PARTIALLY_RECEIVED
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
+model PurchaseOrder {
+  id                  String                    @id @default(cuid())
+  number              String                    @unique
+  supplierId          String
+  supplier            Supplier                  @relation(fields: [supplierId], references: [id])
+  date                DateTime                  @db.Date
+  expectedDate        DateTime?                 @db.Date
+  status              PoStatus                  @default(DRAFT)
+  terms               String?
+  notes               String?
+  /// Reference only (never posted): original currency and rate.
+  refCurrency         String?
+  refRate             Decimal?                  @db.Decimal(18, 6)
+  netTotal            Decimal                   @default(0) @db.Decimal(18, 2)
+  /// VAT charged by the supplier (payable to them).
+  vatTotal            Decimal                   @default(0) @db.Decimal(18, 2)
+  /// Reverse-charge VAT (imports): self-assessed, not paid to the supplier.
+  rcVatTotal          Decimal                   @default(0) @db.Decimal(18, 2)
+  /// Amount payable to the supplier = net + vatTotal.
+  total               Decimal                   @default(0) @db.Decimal(18, 2)
+  paidAmount          Decimal                   @default(0) @db.Decimal(18, 2)
+  /// Payments not yet knocked off against a supplier invoice.
+  advanceBalance      Decimal                   @default(0) @db.Decimal(18, 2)
+  paymentStatus       PaymentStatus             @default(UNPAID)
+  paymentVerifiedAt   DateTime?
+  paymentVerifiedById String?
+  submittedAt         DateTime?
+  approvedById        String?
+  approvedAt          DateTime?
+  rejectionNote       String?
+  cancelReason        String?
+  createdById         String?
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt
+  items               PurchaseOrderItem[]
+  shipments           Shipment[]
+  receipts            GoodsReceipt[]
+  invoices            SupplierInvoice[]
+  payments            SupplierPayment[]
+  expenses            LandedCostExpense[]
+  lots                Lot[]
+  cheques             Cheque[]
+  refunds             Refund[]
+  advanceOut          SupplierAdvanceTransfer[] @relation("AdvanceFrom")
+  advanceIn           SupplierAdvanceTransfer[] @relation("AdvanceTo")
+
+  @@index([supplierId])
+  @@index([status])
+}
+
+model PurchaseOrderItem {
+  id              String                @id @default(cuid())
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  lineNo          Int
+  productId       String
+  product         Product               @relation(fields: [productId], references: [id])
+  description     String?
+  sqm             Decimal               @db.Decimal(18, 4)
+  /// AED per SQM, excl. VAT.
+  unitPrice       Decimal               @db.Decimal(18, 4)
+  taxCodeId       String
+  taxCode         TaxCode               @relation(fields: [taxCodeId], references: [id])
+  /// Required when the tax code is not the standard one (SR, or RC from an import supplier) — spec §3.3.5.
+  taxReason       String?
+  netAmount       Decimal               @db.Decimal(18, 2)
+  vatAmount       Decimal               @db.Decimal(18, 2)
+  receivedSqm     Decimal               @default(0) @db.Decimal(18, 4)
+  /// Inventory value booked by GRNs (credited to GRNI).
+  receivedValue   Decimal               @default(0) @db.Decimal(18, 2)
+  invoicedSqm     Decimal               @default(0) @db.Decimal(18, 4)
+  /// GRNI cleared by supplier invoices.
+  invoicedValue   Decimal               @default(0) @db.Decimal(18, 2)
+  receiptItems    GoodsReceiptItem[]
+  invoiceItems    SupplierInvoiceItem[]
+  lots            Lot[]
+
+  @@unique([purchaseOrderId, lineNo])
+}
+
+enum ShipmentStatus {
+  ORDERED
+  IN_TRANSIT
+  AT_PORT
+  COLLECTED
+  RECEIVED
+}
+
+model Shipment {
+  id              String              @id @default(cuid())
+  number          String              @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id])
+  reference       String?
+  billOfEntryNo   String?
+  containerNos    String?
+  eta             DateTime?           @db.Date
+  status          ShipmentStatus      @default(ORDERED)
+  collectedAt     DateTime?
+  notes           String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  receipts        GoodsReceipt[]
+  expenses        LandedCostExpense[]
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceipt {
+  id              String             @id @default(cuid())
+  number          String             @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id])
+  shipmentId      String?
+  shipment        Shipment?          @relation(fields: [shipmentId], references: [id])
+  warehouseId     String
+  warehouse       Warehouse          @relation(fields: [warehouseId], references: [id])
+  date            DateTime           @db.Date
+  notes           String?
+  totalSqm        Decimal            @db.Decimal(18, 4)
+  totalValue      Decimal            @db.Decimal(18, 2)
+  createdById     String?
+  createdAt       DateTime           @default(now())
+  items           GoodsReceiptItem[]
+  lots            Lot[]
+
+  @@index([purchaseOrderId])
+}
+
+model GoodsReceiptItem {
+  id             String            @id @default(cuid())
+  goodsReceiptId String
+  goodsReceipt   GoodsReceipt      @relation(fields: [goodsReceiptId], references: [id], onDelete: Cascade)
+  poItemId       String
+  poItem         PurchaseOrderItem @relation(fields: [poItemId], references: [id])
+  lotId          String            @unique
+  sqm            Decimal           @db.Decimal(18, 4)
+  value          Decimal           @db.Decimal(18, 2)
+}
+
+model SupplierInvoice {
+  id                String                @id @default(cuid())
+  number            String                @unique
+  supplierId        String
+  supplier          Supplier              @relation(fields: [supplierId], references: [id])
+  purchaseOrderId   String
+  purchaseOrder     PurchaseOrder         @relation(fields: [purchaseOrderId], references: [id])
+  supplierInvoiceNo String
+  date              DateTime              @db.Date
+  dueDate           DateTime?             @db.Date
+  netTotal          Decimal               @db.Decimal(18, 2)
+  vatTotal          Decimal               @db.Decimal(18, 2)
+  rcVatTotal        Decimal               @db.Decimal(18, 2)
+  /// Payable to the supplier = net + vatTotal.
+  total             Decimal               @db.Decimal(18, 2)
+  settledAmount     Decimal               @default(0) @db.Decimal(18, 2)
+  paymentStatus     PaymentStatus         @default(UNPAID)
+  refCurrency       String?
+  refAmount         Decimal?              @db.Decimal(18, 2)
+  refRate           Decimal?              @db.Decimal(18, 6)
+  notes             String?
+  createdById       String?
+  createdAt         DateTime              @default(now())
+  items             SupplierInvoiceItem[]
+
+  @@unique([supplierId, supplierInvoiceNo])
+  @@index([purchaseOrderId])
+}
+
+model SupplierInvoiceItem {
+  id         String            @id @default(cuid())
+  invoiceId  String
+  invoice    SupplierInvoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  poItemId   String
+  poItem     PurchaseOrderItem @relation(fields: [poItemId], references: [id])
+  sqm        Decimal           @db.Decimal(18, 4)
+  unitPrice  Decimal           @db.Decimal(18, 4)
+  taxCodeId  String
+  taxCode    TaxCode           @relation(fields: [taxCodeId], references: [id])
+  /// Required when the code differs from the PO line's and is not the standard one (spec §3.3.5).
+  taxReason  String?
+  netAmount  Decimal           @db.Decimal(18, 2)
+  vatAmount  Decimal           @db.Decimal(18, 2)
+  /// GRNI cleared at PO price.
+  grniAmount Decimal           @db.Decimal(18, 2)
+  /// netAmount − grniAmount; posted to the lots of this PO line.
+  variance   Decimal           @db.Decimal(18, 2)
+}
+
+enum PaymentMode {
+  CASH
+  BANK
+}
+
+/// Payment voucher (PV) to a supplier: for a PO (goods) or for a landed cost bill.
+model SupplierPayment {
+  id                  String             @id @default(cuid())
+  number              String             @unique
+  supplierId          String
+  supplier            Supplier           @relation(fields: [supplierId], references: [id])
+  purchaseOrderId     String?
+  purchaseOrder       PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id])
+  landedCostExpenseId String?
+  landedCostExpense   LandedCostExpense? @relation(fields: [landedCostExpenseId], references: [id])
+  /// Payment of an opening supplier invoice (T11-01).
+  openingItemId       String?
+  openingItem         OpeningItem?       @relation(fields: [openingItemId], references: [id])
+  date                DateTime           @db.Date
+  amount              Decimal            @db.Decimal(18, 2)
+  mode                PaymentMode
+  /// Set for bank payments.
+  bankAccountId       String?
+  bankAccount         BankAccount?       @relation(fields: [bankAccountId], references: [id])
+  reference           String?
+  notes               String?
+  /// Part held as a supplier advance (paid before the invoice).
+  toAdvance           Decimal            @default(0) @db.Decimal(18, 2)
+  /// Part applied to posted supplier invoices / bills.
+  toPayable           Decimal            @default(0) @db.Decimal(18, 2)
+  createdById         String?
+  createdAt           DateTime           @default(now())
+
+  @@index([supplierId])
+  @@index([purchaseOrderId])
+}
+
+enum ExpenseStatus {
+  PENDING
+  ALLOCATED
+}
+
+model LandedCostExpense {
+  id              String                 @id @default(cuid())
+  number          String                 @unique
+  purchaseOrderId String
+  purchaseOrder   PurchaseOrder          @relation(fields: [purchaseOrderId], references: [id])
+  shipmentId      String?
+  shipment        Shipment?              @relation(fields: [shipmentId], references: [id])
+  categoryId      String
+  category        LandedCostCategory     @relation(fields: [categoryId], references: [id])
+  supplierId      String
+  supplier        Supplier               @relation(fields: [supplierId], references: [id])
+  billNo          String
+  date            DateTime               @db.Date
+  /// Net amount (excl. VAT) — this is what is capitalised.
+  amount          Decimal                @db.Decimal(18, 2)
+  taxCodeId       String
+  taxCode         TaxCode                @relation(fields: [taxCodeId], references: [id])
+  vatAmount       Decimal                @db.Decimal(18, 2)
+  /// Payable to the service supplier = amount + VAT (unless reverse charge).
+  total           Decimal                @db.Decimal(18, 2)
+  paidAmount      Decimal                @default(0) @db.Decimal(18, 2)
+  paymentStatus   PaymentStatus          @default(UNPAID)
+  allocationBasis AllocationBasis        @default(SQM)
+  /// Optional: allocate only to these lots (must belong to the PO).
+  restrictLotIds  String[]
+  status          ExpenseStatus          @default(PENDING)
+  allocatedAt     DateTime?
+  notes           String?
+  createdById     String?
+  createdAt       DateTime               @default(now())
+  allocations     LandedCostAllocation[]
+  payments        SupplierPayment[]
+  cheques         Cheque[]
+
+  @@unique([supplierId, billNo])
+  @@index([purchaseOrderId])
+}
+
+model LandedCostAllocation {
+  id               String            @id @default(cuid())
+  expenseId        String
+  expense          LandedCostExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  lotId            String
+  lot              Lot               @relation(fields: [lotId], references: [id])
+  basisValue       Decimal           @db.Decimal(18, 4)
+  allocatedAmount  Decimal           @db.Decimal(18, 2)
+  /// Part added to remaining stock.
+  inventoryAmount  Decimal           @db.Decimal(18, 2)
+  /// Part for SQM already sold / consumed (to COGS).
+  cogsAmount       Decimal           @db.Decimal(18, 2)
+  isManualOverride Boolean           @default(false)
+  overrideReason   String?
+  createdAt        DateTime          @default(now())
+
+  @@unique([expenseId, lotId])
+}
+
+// ───────────────────────────── Sales (Step 5) ─────────────────────────────
+
+/// Spec §3.3.1. Stock is reserved when the SO is saved (no draft state).
+enum SoStatus {
+  OPEN
+  PARTIALLY_INVOICED
+  INVOICED
+  DELIVERED
+  CLOSED
+  CANCELLED
+  EXPIRED
+}
+
+model SalesOrder {
+  id                   String            @id @default(cuid())
+  number               String            @unique
+  customerId           String
+  customer             Customer          @relation(fields: [customerId], references: [id])
+  /// Customer details as they were when the document was saved (spec §3.3.2).
+  customerName         String
+  customerAddress      String?
+  customerTrn          String?
+  customerMobile       String?
+  date                 DateTime          @db.Date
+  status               SoStatus          @default(OPEN)
+  priceMode            PriceMode
+  /// Invoice-level discount, in the document's price mode; spread over the lines before VAT.
+  discount             Decimal           @default(0) @db.Decimal(18, 2)
+  netTotal             Decimal           @default(0) @db.Decimal(18, 2)
+  vatTotal             Decimal           @default(0) @db.Decimal(18, 2)
+  total                Decimal           @default(0) @db.Decimal(18, 2)
+  /// Reservation validity. Not set or enforced until client decision C2 is answered (T5-03).
+  reservationExpiresAt DateTime?         @db.Date
+  notes                String?
+  cancelReason         String?
+  createdById          String?
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  items                SalesOrderItem[]
+  proformas            ProformaInvoice[]
+  /// The CRM opportunity this order won (spec §3.6).
+  opportunityId        String?           @unique
+  opportunity          Opportunity?      @relation(fields: [opportunityId], references: [id])
+
+  @@index([customerId])
+  @@index([status])
+}
+
+model SalesOrderItem {
+  id             String                @id @default(cuid())
+  salesOrderId   String
+  salesOrder     SalesOrder            @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  lineNo         Int
+  productId      String
+  product        Product               @relation(fields: [productId], references: [id])
+  /// The stock bucket reserved: one slab, or a lot/block/warehouse bucket for tiles.
+  balanceId      String
+  balance        StockBalance          @relation(fields: [balanceId], references: [id])
+  /// Reservation held for this line (StockReservation, refType SALES_ORDER).
+  reservationId  String?
+  description    String?
+  sqm            Decimal               @db.Decimal(18, 4)
+  /// AED per SQM in the document's price mode (incl. or excl. VAT).
+  unitPrice      Decimal               @db.Decimal(18, 4)
+  /// Line discount in the document's price mode.
+  discount       Decimal               @default(0) @db.Decimal(18, 2)
+  /// This line's share of the invoice-level discount.
+  headerDiscount Decimal               @default(0) @db.Decimal(18, 2)
+  taxCodeId      String
+  taxCode        TaxCode               @relation(fields: [taxCodeId], references: [id])
+  /// Required when the tax code is not SR (spec §3.3.5).
+  taxReason      String?
+  netAmount      Decimal               @db.Decimal(18, 2)
+  vatAmount      Decimal               @db.Decimal(18, 2)
+  grossAmount    Decimal               @db.Decimal(18, 2)
+  invoicedSqm    Decimal               @default(0) @db.Decimal(18, 4)
+  deliveredSqm   Decimal               @default(0) @db.Decimal(18, 4)
+  piItems        ProformaInvoiceItem[]
+
+  @@unique([salesOrderId, lineNo])
+  @@index([balanceId])
+}
+
+/// Spec §3.3.3. Expired is set by the daily job (or found on use); renewal is audited.
+enum PiStatus {
+  ACTIVE
+  EXPIRED
+  CONVERTED
+  CLOSED
+  CANCELLED
+}
+
+/// A quotation for (part of) a sales order. Posts no accounting or VAT.
+model ProformaInvoice {
+  id              String                @id @default(cuid())
+  number          String                @unique
+  salesOrderId    String
+  salesOrder      SalesOrder            @relation(fields: [salesOrderId], references: [id])
+  customerId      String
+  customer        Customer              @relation(fields: [customerId], references: [id])
+  customerName    String
+  customerAddress String?
+  customerTrn     String?
+  customerMobile  String?
+  date            DateTime              @db.Date
+  validityDays    Int
+  expiryDate      DateTime              @db.Date
+  status          PiStatus              @default(ACTIVE)
+  priceMode       PriceMode
+  discount        Decimal               @default(0) @db.Decimal(18, 2)
+  netTotal        Decimal               @default(0) @db.Decimal(18, 2)
+  vatTotal        Decimal               @default(0) @db.Decimal(18, 2)
+  total           Decimal               @default(0) @db.Decimal(18, 2)
+  terms           String?
+  notes           String?
+  renewedById     String?
+  renewedAt       DateTime?
+  renewCount      Int                   @default(0)
+  /// Customer receipts recorded against this PI (advances). A PI with money received does not auto-expire.
+  receivedAmount  Decimal               @default(0) @db.Decimal(18, 2)
+  closeReason     String?
+  createdById     String?
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+  items           ProformaInvoiceItem[]
+  receipts        CustomerReceipt[]
+  cheques         Cheque[]
+  refunds         Refund[]
+
+  @@index([salesOrderId])
+  @@index([status, expiryDate])
+}
+
+model ProformaInvoiceItem {
+  id                String          @id @default(cuid())
+  proformaInvoiceId String
+  proformaInvoice   ProformaInvoice @relation(fields: [proformaInvoiceId], references: [id], onDelete: Cascade)
+  lineNo            Int
+  salesOrderItemId  String
+  salesOrderItem    SalesOrderItem  @relation(fields: [salesOrderItemId], references: [id])
+  productId         String
+  product           Product         @relation(fields: [productId], references: [id])
+  description       String?
+  sqm               Decimal         @db.Decimal(18, 4)
+  unitPrice         Decimal         @db.Decimal(18, 4)
+  discount          Decimal         @default(0) @db.Decimal(18, 2)
+  headerDiscount    Decimal         @default(0) @db.Decimal(18, 2)
+  taxCodeId         String
+  taxCode           TaxCode         @relation(fields: [taxCodeId], references: [id])
+  netAmount         Decimal         @db.Decimal(18, 2)
+  vatAmount         Decimal         @db.Decimal(18, 2)
+  grossAmount       Decimal         @db.Decimal(18, 2)
+
+  @@unique([proformaInvoiceId, lineNo])
+}
+
+// ───────────────────────────── Customer receipts (Step 6) ─────────────────────────────
+
+enum ReceiptStatus {
+  POSTED
+  CANCELLED
+}
+
+/// Cash receipt (CR) or bank receipt (RV), spec §3.3.6. Until a tax invoice takes it, the money is a customer
+/// advance (liability). PDC receipts come with T6-02.
+model CustomerReceipt {
+  id                String           @id @default(cuid())
+  number            String           @unique
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  date              DateTime         @db.Date
+  amount            Decimal          @db.Decimal(18, 2)
+  mode              PaymentMode
+  bankAccountId     String?
+  bankAccount       BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  reference         String?
+  /// Optional: the proforma this advance is for (its SO's tax invoice will take it, T5-07).
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice? @relation(fields: [proformaInvoiceId], references: [id])
+  /// Part already applied to tax invoices (T5-07 / T6-01 allocation). Zero until tax invoices exist.
+  allocatedAmount   Decimal          @default(0) @db.Decimal(18, 2)
+  status            ReceiptStatus    @default(POSTED)
+  notes             String?
+  cancelReason      String?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+
+  @@index([customerId])
+  @@index([proformaInvoiceId])
+}
+
+// ───────────────────────────── Scheduled jobs (TJ-01) ─────────────────────────────
+
+enum JobRunStatus {
+  RUNNING
+  OK
+  WARNING
+  FAILED
+}
+
+/// One run of a scheduled job. (job, runKey) is unique: the daily runner uses the business date as the key,
+/// so a job runs at most once per day however often the runner wakes up; manual runs use their own key.
+model JobRun {
+  id         String       @id @default(cuid())
+  job        String
+  runKey     String
+  status     JobRunStatus @default(RUNNING)
+  result     Json?
+  error      String?
+  trigger    String // schedule | manual
+  userId     String?
+  startedAt  DateTime     @default(now())
+  finishedAt DateTime?
+
+  @@unique([job, runKey])
+  @@index([startedAt])
+}
+
+// ───────────────────────────── Post-dated cheques (T6-02) ─────────────────────────────
+
+enum ChequeDirection {
+  RECEIVED
+  ISSUED
+}
+
+/// Spec §3.4.4: Received/Issued → Deposited → Cleared / Bounced / Cancelled / Replaced.
+enum ChequeStatus {
+  RECEIVED
+  ISSUED
+  DEPOSITED
+  CLEARED
+  BOUNCED
+  CANCELLED
+  REPLACED
+}
+
+model Cheque {
+  id                  String              @id @default(cuid())
+  /// PDC-YYNNNN
+  number              String              @unique
+  direction           ChequeDirection
+  chequeNo            String
+  /// Received: the customer's bank. Issued: our bank account (bankAccountId).
+  bankName            String?
+  branch              String?
+  amount              Decimal             @db.Decimal(18, 2)
+  /// Date the cheque was handed over / written.
+  issueDate           DateTime            @db.Date
+  /// Date on the cheque: it cannot clear before this.
+  dueDate             DateTime            @db.Date
+  customerId          String?
+  customer            Customer?           @relation(fields: [customerId], references: [id])
+  supplierId          String?
+  supplier            Supplier?           @relation(fields: [supplierId], references: [id])
+  proformaInvoiceId   String?
+  proformaInvoice     ProformaInvoice?    @relation(fields: [proformaInvoiceId], references: [id])
+  purchaseOrderId     String?
+  purchaseOrder       PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id])
+  /// Issued against an opening supplier invoice (T11-01) instead of a PO.
+  openingItemId       String?
+  openingItem         OpeningItem?        @relation(fields: [openingItemId], references: [id])
+  /// Issued against a landed cost bill (freight, customs, …) instead of a PO.
+  landedCostExpenseId String?
+  landedCostExpense   LandedCostExpense?  @relation(fields: [landedCostExpenseId], references: [id])
+  /// Received: the bank it was deposited into. Issued: the bank it is drawn on.
+  bankAccountId       String?
+  bankAccount         BankAccount?        @relation(fields: [bankAccountId], references: [id])
+  status              ChequeStatus
+  remarks             String?
+  bounceReason        String?
+  replacesId          String?             @unique
+  replaces            Cheque?             @relation("ChequeReplacement", fields: [replacesId], references: [id])
+  replacedBy          Cheque?             @relation("ChequeReplacement")
+  createdById         String?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  history             ChequeStatusEvent[]
+
+  @@index([direction, status, dueDate])
+  @@index([customerId])
+  @@index([supplierId])
+}
+
+/// Every status change with its date, user and remarks (spec §3.4.4).
+model ChequeStatusEvent {
+  id         String        @id @default(cuid())
+  chequeId   String
+  cheque     Cheque        @relation(fields: [chequeId], references: [id], onDelete: Cascade)
+  fromStatus ChequeStatus?
+  toStatus   ChequeStatus
+  date       DateTime      @db.Date
+  remarks    String?
+  userId     String?
+  createdAt  DateTime      @default(now())
+
+  @@index([chequeId])
+}
+
+// ───────────────────────────── Refunds and advance transfers (T8-06, T4-15) ─────────────────────────────
+
+enum RefundParty {
+  CUSTOMER
+  SUPPLIER
+}
+
+/// Refund voucher (spec §3.4.3, TD-027). Customer refund: we pay back an unapplied customer advance
+/// (Dr Customer Advances, Cr Cash/Bank). Supplier refund: the supplier pays back an advance left on a closed PO
+/// (Dr Cash/Bank, Cr Supplier Advances). Never edited; a wrong one is cancelled with a reason (reverse entry).
+model Refund {
+  id                String           @id @default(cuid())
+  number            String           @unique
+  partyType         RefundParty
+  customerId        String?
+  customer          Customer?        @relation(fields: [customerId], references: [id])
+  supplierId        String?
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id])
+  /// Customer refund of money received against this proforma (reduces its received amount).
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice? @relation(fields: [proformaInvoiceId], references: [id])
+  /// Supplier refund of the advance left on this PO.
+  purchaseOrderId   String?
+  purchaseOrder     PurchaseOrder?   @relation(fields: [purchaseOrderId], references: [id])
+  date              DateTime         @db.Date
+  amount            Decimal          @db.Decimal(18, 2)
+  mode              PaymentMode
+  bankAccountId     String?
+  bankAccount       BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  reference         String?
+  reason            String
+  status            ReceiptStatus    @default(POSTED)
+  cancelReason      String?
+  cancelledAt       DateTime?
+  cancelledById     String?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+
+  @@index([customerId])
+  @@index([supplierId])
+  @@index([proformaInvoiceId])
+  @@index([purchaseOrderId])
+}
+
+/// A supplier advance left on a closed PO, applied to another PO of the same supplier (T4-15).
+/// The moved amount first settles posted invoices of the target PO (Dr AP, Cr Supplier Advances); the rest stays an advance.
+model SupplierAdvanceTransfer {
+  id                  String        @id @default(cuid())
+  number              String        @unique
+  supplierId          String
+  supplier            Supplier      @relation(fields: [supplierId], references: [id])
+  fromPurchaseOrderId String
+  fromPurchaseOrder   PurchaseOrder @relation("AdvanceFrom", fields: [fromPurchaseOrderId], references: [id])
+  toPurchaseOrderId   String
+  toPurchaseOrder     PurchaseOrder @relation("AdvanceTo", fields: [toPurchaseOrderId], references: [id])
+  date                DateTime      @db.Date
+  amount              Decimal       @db.Decimal(18, 2)
+  toPayable           Decimal       @default(0) @db.Decimal(18, 2)
+  toAdvance           Decimal       @default(0) @db.Decimal(18, 2)
+  reason              String
+  status              ReceiptStatus @default(POSTED)
+  cancelReason        String?
+  cancelledAt         DateTime?
+  cancelledById       String?
+  createdById         String?
+  createdAt           DateTime      @default(now())
+
+  @@index([supplierId])
+  @@index([fromPurchaseOrderId])
+  @@index([toPurchaseOrderId])
+}
+
+// ───────────────────────────── Petty cash (T8-04) ─────────────────────────────
+
+/// A petty cash box. Each box owns one GL account under Cash & Bank (the first one is "Petty Cash" 1120).
+model PettyCashAccount {
+  id           String                 @id @default(cuid())
+  code         String                 @unique
+  name         String
+  /// The person who holds the cash (optional).
+  custodianId  String?
+  custodian    User?                  @relation(fields: [custodianId], references: [id])
+  accountId    String                 @unique
+  account      Account                @relation(fields: [accountId], references: [id])
+  active       Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  transactions PettyCashTransaction[]
+}
+
+/// Expense category mapped to a GL expense account (spec §3.4.5).
+model ExpenseCategory {
+  id           String                 @id @default(cuid())
+  name         String                 @unique
+  accountId    String
+  account      Account                @relation(fields: [accountId], references: [id])
+  active       Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
+  transactions PettyCashTransaction[]
+}
+
+enum PettyCashType {
+  TOP_UP
+  EXPENSE
+}
+
+/// Cash in (top-up from cash in hand or a bank) or cash out (expense with category and optional input VAT).
+/// Never edited; a wrong one is cancelled with a reason (reverse entry). TD-028.
+model PettyCashTransaction {
+  id                 String           @id @default(cuid())
+  number             String           @unique
+  pettyCashAccountId String
+  pettyCashAccount   PettyCashAccount @relation(fields: [pettyCashAccountId], references: [id])
+  type               PettyCashType
+  date               DateTime         @db.Date
+  /// Total cash in or out (expenses: VAT-inclusive, as on the receipt).
+  amount             Decimal          @db.Decimal(18, 2)
+  /// Top-up source.
+  mode               PaymentMode?
+  bankAccountId      String?
+  bankAccount        BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  /// Expense details.
+  categoryId         String?
+  category           ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  taxCodeId          String?
+  taxCode            TaxCode?         @relation(fields: [taxCodeId], references: [id])
+  netAmount          Decimal          @default(0) @db.Decimal(18, 2)
+  vatAmount          Decimal          @default(0) @db.Decimal(18, 2)
+  payee              String?
+  /// Receipt / bill number from the shop.
+  reference          String?
+  description        String
+  status             ReceiptStatus    @default(POSTED)
+  cancelReason       String?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  createdById        String?
+  createdAt          DateTime         @default(now())
+
+  @@index([pettyCashAccountId, date])
+  @@index([categoryId])
+}
+
+// ───────────────────────────── Bank reconciliation (T8-05) ─────────────────────────────
+
+/// One line of a bank statement, entered by hand or imported from CSV. amount > 0 = money in, < 0 = money out.
+model BankStatementLine {
+  id            String      @id @default(cuid())
+  bankAccountId String
+  bankAccount   BankAccount @relation(fields: [bankAccountId], references: [id])
+  date          DateTime    @db.Date
+  description   String
+  reference     String?
+  amount        Decimal     @db.Decimal(18, 2)
+  /// Set for lines from one CSV import.
+  importBatch   String?
+  createdById   String?
+  createdAt     DateTime    @default(now())
+  matches       BankMatch[]
+
+  @@index([bankAccountId, date])
+}
+
+/// A statement line matched to one or more ledger lines on the bank's GL account (their amounts add up to it).
+/// A ledger line is matched at most once.
+model BankMatch {
+  id              String            @id @default(cuid())
+  statementLineId String
+  statementLine   BankStatementLine @relation(fields: [statementLineId], references: [id])
+  journalLineId   String            @unique
+  journalLine     JournalLine       @relation(fields: [journalLineId], references: [id])
+  matchedById     String?
+  createdAt       DateTime          @default(now())
+
+  @@index([statementLineId])
+}
+
+/// A saved reconciliation for a statement date (spec §3.4.6: "saved per period"). Statement lines and matches dated
+/// on or before the latest saved date are locked until it is reopened.
+model BankReconciliation {
+  id               String      @id @default(cuid())
+  bankAccountId    String
+  bankAccount      BankAccount @relation(fields: [bankAccountId], references: [id])
+  statementDate    DateTime    @db.Date
+  statementBalance Decimal     @db.Decimal(18, 2)
+  bookBalance      Decimal     @db.Decimal(18, 2)
+  /// Statement lines not yet in the books (+ in, − out).
+  unrecorded       Decimal     @db.Decimal(18, 2)
+  /// Book lines not yet on the statement (+ deposits in transit, − payments not yet presented).
+  outstanding      Decimal     @db.Decimal(18, 2)
+  /// Snapshot of the unmatched items at saving time.
+  items            Json
+  notes            String?
+  createdById      String?
+  createdAt        DateTime    @default(now())
+
+  @@unique([bankAccountId, statementDate])
+}
+
+// ───────────────────────────── CRM (T10-01) ─────────────────────────────
+
+/// Extra contact persons of a customer (spec §3.6 "multiple contact persons"); the main one stays on Customer.
+model CustomerContact {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  name       String
+  role       String?
+  mobile     String?
+  email      String?
+  createdAt  DateTime @default(now())
+
+  @@index([customerId])
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  CONVERTED
+  LOST
+}
+
+model Lead {
+  id                  String           @id @default(cuid())
+  number              String           @unique
+  name                String
+  company             String?
+  contactPerson       String?
+  mobile              String?
+  email               String?
+  source              String
+  requirement         String?
+  productId           String?
+  product             Product?         @relation(fields: [productId], references: [id])
+  expectedSqm         Decimal?         @db.Decimal(18, 4)
+  project             String?
+  assignedToId        String
+  assignedTo          User             @relation("LeadAssignee", fields: [assignedToId], references: [id])
+  status              LeadStatus       @default(NEW)
+  lostReason          String?
+  convertedAt         DateTime?
+  /// The customer this lead became, or the existing customer it was converted to (many leads → one customer).
+  convertedCustomerId String?
+  convertedCustomer   Customer?        @relation("LeadConvertedTo", fields: [convertedCustomerId], references: [id])
+  /// Set when converting created a new customer (Customer.leadId points back).
+  customer            Customer?        @relation("LeadCustomer")
+  createdById         String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  opportunities       Opportunity[]
+  interactions        CrmInteraction[]
+  followUps           CrmFollowUp[]
+
+  @@index([status])
+  @@index([assignedToId])
+  @@index([convertedCustomerId])
+}
+
+enum OpportunityStage {
+  INQUIRY
+  QUOTATION
+  NEGOTIATION
+  WON
+  LOST
+}
+
+model Opportunity {
+  id                String           @id @default(cuid())
+  number            String           @unique
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  leadId            String?
+  lead              Lead?            @relation(fields: [leadId], references: [id])
+  title             String
+  project           String?
+  expectedSqm       Decimal?         @db.Decimal(18, 4)
+  expectedValue     Decimal          @default(0) @db.Decimal(18, 2)
+  stage             OpportunityStage @default(INQUIRY)
+  expectedCloseDate DateTime?        @db.Date
+  ownerId           String
+  owner             User             @relation("OpportunityOwner", fields: [ownerId], references: [id])
+  lostReason        String?
+  closedAt          DateTime?
+  salesOrder        SalesOrder?
+  createdById       String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  interactions      CrmInteraction[]
+  followUps         CrmFollowUp[]
+
+  @@index([stage])
+  @@index([ownerId])
+  @@index([customerId])
+}
+
+enum InteractionType {
+  CALL
+  MEETING
+  SITE_VISIT
+  EMAIL
+  NOTE
+}
+
+/// Communication history (spec §3.6): on a customer, a lead or an opportunity.
+model CrmInteraction {
+  id            String          @id @default(cuid())
+  type          InteractionType
+  at            DateTime
+  customerId    String?
+  customer      Customer?       @relation(fields: [customerId], references: [id])
+  leadId        String?
+  lead          Lead?           @relation(fields: [leadId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity?    @relation(fields: [opportunityId], references: [id])
+  userId        String
+  user          User            @relation("InteractionUser", fields: [userId], references: [id])
+  notes         String
+  outcome       String?
+  createdAt     DateTime        @default(now())
+
+  @@index([customerId])
+  @@index([leadId])
+  @@index([opportunityId])
+  @@index([userId, at])
+}
+
+enum FollowUpStatus {
+  OPEN
+  DONE
+  CANCELLED
+}
+
+/// A reminder to follow up (spec §3.6). "Overdue" = OPEN and past dueAt (computed, not stored).
+model CrmFollowUp {
+  id            String         @id @default(cuid())
+  dueAt         DateTime
+  assignedToId  String
+  assignedTo    User           @relation("FollowUpAssignee", fields: [assignedToId], references: [id])
+  customerId    String?
+  customer      Customer?      @relation(fields: [customerId], references: [id])
+  leadId        String?
+  lead          Lead?          @relation(fields: [leadId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity?   @relation(fields: [opportunityId], references: [id])
+  notes         String
+  status        FollowUpStatus @default(OPEN)
+  outcome       String?
+  doneAt        DateTime?
+  doneById      String?
+  createdById   String?
+  createdAt     DateTime       @default(now())
+
+  @@index([assignedToId, status, dueAt])
+  @@index([customerId])
+  @@index([leadId])
+  @@index([opportunityId])
+}
+
+// ───────────────────────────── Opening balances (T11-01) ─────────────────────────────
+
+enum OpeningKind {
+  CUSTOMER_INVOICE
+  SUPPLIER_INVOICE
+  CUSTOMER_ADVANCE
+  SUPPLIER_ADVANCE
+  CASH_BANK
+}
+
+enum OpeningStatus {
+  OPEN
+  SETTLED
+  CANCELLED
+}
+
+/// One go-live balance (spec §3.4.7), posted against Opening Balance Equity (TD-033).
+/// Invoices are kept one by one so receipts and payments can knock them off.
+model OpeningItem {
+  id            String              @id @default(cuid())
+  /// OB-YYNNNN
+  number        String              @unique
+  kind          OpeningKind
+  /// The "as at" date of the opening balance (posting date).
+  date          DateTime            @db.Date
+  customerId    String?
+  customer      Customer?           @relation(fields: [customerId], references: [id])
+  supplierId    String?
+  supplier      Supplier?           @relation(fields: [supplierId], references: [id])
+  /// CASH_BANK: the cash, bank or petty cash ledger account.
+  accountId     String?
+  account       Account?            @relation(fields: [accountId], references: [id])
+  /// Invoices: the party's invoice number, its date and due date.
+  refNo         String?
+  docDate       DateTime?           @db.Date
+  dueDate       DateTime?           @db.Date
+  /// Invoices and advances: > 0. CASH_BANK: may be < 0 (bank overdraft).
+  amount        Decimal             @db.Decimal(18, 2)
+  /// Invoices: the part already knocked off.
+  settledAmount Decimal             @default(0) @db.Decimal(18, 2)
+  status        OpeningStatus       @default(OPEN)
+  notes         String?
+  cancelReason  String?
+  cancelledAt   DateTime?
+  createdById   String?
+  createdAt     DateTime            @default(now())
+  allocations   OpeningAllocation[]
+  payments      SupplierPayment[]
+  cheques       Cheque[]
+
+  @@unique([kind, customerId, refNo])
+  @@unique([kind, supplierId, refNo])
+  @@index([kind, status])
+}
+
+/// A customer's free advance applied to an opening customer invoice (Dr Customer Advances, Cr AR).
+model OpeningAllocation {
+  id            String      @id @default(cuid())
+  openingItemId String
+  openingItem   OpeningItem @relation(fields: [openingItemId], references: [id])
+  date          DateTime    @db.Date
+  amount        Decimal     @db.Decimal(18, 2)
+  createdById   String?
+  createdAt     DateTime    @default(now())
+
+  @@index([openingItemId])
+}
+
+// ───────────────────────────── Imports (T11-02) ─────────────────────────────
+
+/// Every import check (dry run) and import (spec §9 opening_balance_batches): what, which file, the outcome.
+model ImportBatch {
+  id          String   @id @default(cuid())
+  entity      String
+  fileName    String
+  /// DRY_RUN or COMMIT
+  mode        String
+  rowsTotal   Int
+  rowsOk      Int
+  rowsFailed  Int
+  /// The error report: [{ row, column?, message }] (first 500).
+  errors      Json
+  committed   Boolean  @default(false)
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([entity, createdAt])
 }

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Card, Empty, LinkButton, PageHeader, SearchBar, Stat, Table } from "@/components/ui";
+import { Badge, Card, Empty, LinkButton, PageHeader, SearchBar, Stat, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { sum } from "@/server/core";
 import { inventoryReconciliation, stockByProduct } from "@/server/inventory/queries";
@@ -27,6 +27,7 @@ export default async function StockSummary({ searchParams }: { searchParams: Pro
         subtitle="SQM-wise inventory. Available = physical − reserved."
         actions={user.ctx.permissions.has("inventory.openingStock") && <LinkButton href="/inventory/lots/new">Enter opening stock</LinkButton>}
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href="/api/export/stock">Excel</FileButton></div>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Physical" value={`${fmtSqm(t.onHand)} SQM`} />
         <Stat label="Reserved" value={`${fmtSqm(t.reserved)} SQM`} />

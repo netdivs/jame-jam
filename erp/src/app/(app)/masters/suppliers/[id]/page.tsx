@@ -6,7 +6,7 @@ import { prisma } from "@/server/core";
 import { saveSupplierAction } from "../../actions";
 
 export default async function SupplierForm({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermission("suppliers.edit");
+  const user = await requirePermission("suppliers.edit");
   const { id } = await params;
   const isNew = id === "new";
   const s = isNew ? null : await prisma.supplier.findUnique({ where: { id } });
@@ -14,7 +14,7 @@ export default async function SupplierForm({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <PageHeader title={isNew ? "New supplier" : s!.name} subtitle={s?.code} back={{ href: "/masters/suppliers", label: "Suppliers" }} />
+      <PageHeader title={isNew ? "New supplier" : s!.name} subtitle={s?.code} back={{ href: "/masters/suppliers", label: "Suppliers" }} actions={!isNew && user.ctx.permissions.has("accounts.view") && <LinkButton href={`/accounts/ledgers/supplier/${id}`} variant="secondary">Ledger / statement</LinkButton>} />
       <Card className="max-w-3xl">
         <ActionForm action={saveSupplierAction.bind(null, isNew ? null : id)} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

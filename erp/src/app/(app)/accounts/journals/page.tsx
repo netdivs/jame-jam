@@ -1,4 +1,5 @@
-import { Card, Empty, PageHeader } from "@/components/ui";
+import Link from "next/link";
+import { Card, Empty, LinkButton, PageHeader } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { prisma } from "@/server/core";
 import { fmtDate, fmtMoney, titleCase } from "@/lib/format";
@@ -6,7 +7,7 @@ import { fmtDate, fmtMoney, titleCase } from "@/lib/format";
 export const metadata = { title: "Journal entries" };
 
 export default async function JournalsPage() {
-  await requirePermission("accounts.view");
+  const user = await requirePermission("accounts.view");
   const entries = await prisma.journalEntry.findMany({
     orderBy: [{ date: "desc" }, { number: "desc" }],
     include: { lines: { include: { account: true } } },
@@ -14,7 +15,11 @@ export default async function JournalsPage() {
   });
   return (
     <>
-      <PageHeader title="Journal entries" subtitle="Posted automatically by documents. Posted entries are never edited." />
+      <PageHeader
+        title="Journal entries"
+        subtitle="Posted by documents and by manual journal vouchers. Posted entries are never edited."
+        actions={user.ctx.permissions.has("journal.post") && <LinkButton href="/accounts/journals/new">New journal voucher</LinkButton>}
+      />
       {entries.length === 0 ? (
         <Card>
           <Empty>No journal entries yet.</Empty>
@@ -27,7 +32,7 @@ export default async function JournalsPage() {
               pad={false}
               title={
                 <span>
-                  <span className="font-mono">{e.number}</span>
+                  <Link href={`/accounts/journals/${e.id}`} className="font-mono text-primary hover:underline">{e.number}</Link>
                   <span className="font-normal text-muted"> · {fmtDate(e.date)} · {titleCase(e.sourceType)}</span>
                 </span>
               }

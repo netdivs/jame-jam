@@ -23,9 +23,19 @@ export async function runAction(fn: (user: SessionUser) => Promise<string | void
   }
 }
 
-/** FormData → plain object (repeated keys become arrays). */
+/** FormData → plain object of string fields (a repeated key keeps its last value; send lists as a JSON `payload`). */
 export function formObject(fd: FormData): Record<string, string> {
   const o: Record<string, string> = {};
   for (const [k, v] of fd.entries()) if (typeof v === "string" && !k.startsWith("$ACTION")) o[k] = v;
   return o;
+}
+
+/** "Paid from / received into" select value → { mode, bankAccountId }. Values: "CASH" or "BANK:<bankAccountId>". */
+export function withPaidFrom(o: Record<string, string>): Record<string, string> {
+  const v = o.paidFrom;
+  if (v === undefined) return o;
+  const { paidFrom: _p, ...rest } = o;
+  if (v === "CASH") return { ...rest, mode: "CASH" };
+  if (v.startsWith("BANK:")) return { ...rest, mode: "BANK", bankAccountId: v.slice(5) };
+  return { ...rest, mode: "" };
 }

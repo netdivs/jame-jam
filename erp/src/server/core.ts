@@ -1,4 +1,5 @@
 // Shared building blocks for every server-side service.
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Prisma, PrismaClient } from "@prisma/client";
 
 // ── Prisma client (one instance per process; survives Next.js hot reload) ──
@@ -9,8 +10,19 @@ if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
 export type Tx = Prisma.TransactionClient;
 
 /** Run fn in one DB transaction. All stock + GL postings for a document must go through here. */
+// An outer transaction that services join instead of opening their own (bulk imports, T11-02). Each inTx() inside
+// it runs on the same transaction, so a whole import commits or rolls back as one.
+const outerTx = new AsyncLocalStorage<Tx>();
+
 export function inTx<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  const outer = outerTx.getStore();
+  if (outer) return fn(outer);
   return prisma.$transaction(fn, { timeout: 30_000, maxWait: 10_000 });
+}
+
+/** Run `fn` in one transaction that every service call inside it joins. */
+export function inOuterTx<T>(fn: (tx: Tx) => Promise<T>, timeoutMs = 300_000): Promise<T> {
+  return prisma.$transaction((tx) => outerTx.run(tx, () => fn(tx)), { timeout: timeoutMs, maxWait: 10_000 });
 }
 
 // ── Errors ──
@@ -22,7 +34,8 @@ export type ErrorCode =
   | "CONFLICT"
   | "INSUFFICIENT_STOCK"
   | "PERIOD_LOCKED"
-  | "UNBALANCED";
+  | "UNBALANCED"
+  | "RATE_LIMITED";
 
 export class AppError extends Error {
   constructor(
@@ -41,6 +54,8 @@ export type Ctx = {
   permissions: ReadonlySet<string>;
   /** Seeds, scheduled jobs. Bypasses permission checks; never used for user requests. */
   isSystem?: boolean;
+  /** Client IP of the request, written to audit rows (TS-02). */
+  ip?: string | null;
 };
 export const systemCtx: Ctx = { userId: null, permissions: new Set(), isSystem: true };
 
@@ -90,6 +105,7 @@ export async function audit(
       before: toJson(e.before),
       after: toJson(e.after),
       meta: toJson(e.meta),
+      ip: ctx.ip ?? null,
     },
   });
 }
@@ -112,6 +128,8 @@ export const DOC_PREFIX: Record<string, string> = {
   PO: "PO",
   GRN: "GRN",
   PUR: "PUR",
+  SHP: "SHP",
+  LCE: "LCE",
 };
 
 /**

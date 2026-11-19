@@ -5,5 +5,8 @@
 requirements/*.pdf
 requirements/*.docx
 
-# Local Claude tooling
-.claude/
+# Claude tooling: shared project config is tracked (TD-015); everything else stays local
+.claude/*
+!.claude/agents/
+!.claude/skills/
+.claude/skills/ui-ux-pro-max/

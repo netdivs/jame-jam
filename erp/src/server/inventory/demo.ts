@@ -11,8 +11,8 @@ const slabsOf = (prefix: string, n: number, l: number, w: number, shade: string)
     shade,
   }));
 
-export async function seedDemoInventory(db: PrismaClient): Promise<void> {
-  if ((await db.lot.count()) > 0) return; // idempotent
+export async function seedDemoInventory(db: PrismaClient, opts: { force?: boolean } = {}): Promise<void> {
+  if (!opts.force && (await db.lot.count()) > 0) return; // idempotent; force is for tests on a fresh test database
 
   const sr = await db.taxCode.findUniqueOrThrow({ where: { code: "SR" } });
   const wh = await db.warehouse.findUniqueOrThrow({ where: { code: "ALSAJJA" } });

@@ -71,6 +71,151 @@ async function newSlabNo(tx: Tx, date: Date, given?: string): Promise<string> {
   return no;
 }
 
+export const lotBodySchema = z.object({
+  lotNo: optText(40),
+  remarks: optText(500),
+  /** Tiles without blocks: SQM held at lot level. */
+  tileSqm: z.union([decimal({ gt: 0, dp: 4, label: "Lot SQM" }), z.literal("").transform(() => undefined)]).optional(),
+  blocks: z.array(blockInput).default([]),
+});
+type LotBody = z.output<typeof lotBodySchema>;
+
+/**
+ * Create one lot with its blocks and slabs (or tile SQM), stock buckets and inbound movements,
+ * inside the caller's transaction. Does not post to the GL — the caller posts the returned value.
+ */
+export async function createLotStock(
+  tx: Tx,
+  ctx: Ctx,
+  a: {
+    product: { id: string; type: "SLAB" | "TILE"; itemCode: string; thicknessMm: Dec | null };
+    warehouseId: string;
+    supplierId?: string | null;
+    date: Date;
+    costPerSqm: Dec;
+    body: LotBody;
+    source: "OPENING" | "GRN";
+    movementType: "OPENING" | "GRN";
+    refType: string;
+    /** Movement refId; defaults to the new lot's id. */
+    refId?: string;
+    purchaseOrderId?: string;
+    poItemId?: string;
+    goodsReceiptId?: string;
+    label?: string;
+  },
+) {
+  const { product, body } = a;
+  const tag = a.label ? `${a.label}: ` : "";
+  const blockNos = body.blocks.map((b) => b.blockNo.toUpperCase());
+  if (new Set(blockNos).size !== blockNos.length) throw new AppError("VALIDATION", `${tag}Block numbers must be unique within a lot`);
+  if (product.type === "SLAB") {
+    if (body.tileSqm) throw new AppError("VALIDATION", `${tag}Slab stock is entered per slab, not as lot SQM`);
+    if (body.blocks.length === 0) throw new AppError("VALIDATION", `${tag}Add at least one block`);
+    for (const b of body.blocks) {
+      if (b.slabs.length === 0) throw new AppError("VALIDATION", `${tag}Block ${b.blockNo} has no slabs`);
+      if (b.sqm) throw new AppError("VALIDATION", `${tag}Block ${b.blockNo}: slab blocks take SQM from their slabs`);
+    }
+    const givenNos = body.blocks.flatMap((b) => b.slabs.map((s) => s.slabNo).filter(Boolean)) as string[];
+    if (new Set(givenNos).size !== givenNos.length) throw new AppError("VALIDATION", `${tag}Slab numbers must be unique`);
+  } else {
+    if (body.blocks.some((b) => b.slabs.length > 0)) throw new AppError("VALIDATION", `${tag}Tiles are not tracked per slab`);
+    if (body.blocks.length === 0 && !body.tileSqm) throw new AppError("VALIDATION", `${tag}Enter the lot SQM or add blocks with SQM`);
+    if (body.blocks.length > 0 && body.tileSqm) throw new AppError("VALIDATION", `${tag}Enter SQM either at lot level or per block, not both`);
+    for (const b of body.blocks) if (!b.sqm) throw new AppError("VALIDATION", `${tag}Block ${b.blockNo}: SQM is required`);
+  }
+
+  const lotNo = body.lotNo ?? (await nextDocNumber(tx, "LOT", a.date));
+  if (await tx.lot.findUnique({ where: { lotNo } })) throw new AppError("CONFLICT", `Lot number ${lotNo} already exists`);
+
+  const lot = await tx.lot.create({
+    data: {
+      lotNo,
+      productId: product.id,
+      supplierId: a.supplierId ?? undefined,
+      warehouseId: a.warehouseId,
+      source: a.source,
+      receivedDate: a.date,
+      totalSqm: ZERO,
+      landedCostTotal: ZERO,
+      costPerSqm: round4(a.costPerSqm),
+      remarks: body.remarks,
+      purchaseOrderId: a.purchaseOrderId,
+      poItemId: a.poItemId,
+      goodsReceiptId: a.goodsReceiptId,
+      createdById: ctx.userId,
+    },
+  });
+  const refId = a.refId ?? lot.id;
+
+  const values: Dec[] = [];
+  const sqms: Dec[] = [];
+  const receive = async (bucket: { blockId: string | null; slabId: string | null }, sqm: Dec) => {
+    const balance = await tx.stockBalance.create({
+      data: {
+        bucketKey: bucket.slabId ? bucketKeyForSlab(bucket.slabId) : bucketKeyForLot(lot.id, bucket.blockId, a.warehouseId),
+        productId: product.id,
+        lotId: lot.id,
+        blockId: bucket.blockId,
+        slabId: bucket.slabId,
+        warehouseId: a.warehouseId,
+      },
+      include: { lot: { select: { costPerSqm: true } } },
+    });
+    const { value } = await writeMovement(tx, ctx, balance, { type: a.movementType, sqm, date: a.date, refType: a.refType, refId });
+    values.push(value);
+    sqms.push(sqm);
+  };
+
+  if (product.type === "TILE" && body.tileSqm) {
+    await receive({ blockId: null, slabId: null }, round4(body.tileSqm));
+  }
+  for (const b of body.blocks) {
+    const block = await tx.block.create({ data: { blockNo: b.blockNo, lotId: lot.id, origin: b.origin, remarks: b.remarks } });
+    if (product.type === "TILE") {
+      await receive({ blockId: block.id, slabId: null }, round4(b.sqm!));
+      continue;
+    }
+    for (const s of b.slabs) {
+      const sqm = slabArea(ctx, s);
+      const slabNo = await newSlabNo(tx, a.date, s.slabNo);
+      const slab = await tx.slab.create({
+        data: {
+          slabNo,
+          barcode: slabNo,
+          blockId: block.id,
+          lotId: lot.id,
+          productId: product.id,
+          warehouseId: a.warehouseId,
+          lengthCm: s.lengthCm,
+          widthCm: s.widthCm,
+          thicknessMm: s.thicknessMm ?? product.thicknessMm,
+          totalSqm: sqm,
+          shade: s.shade,
+          remarks: s.remarks,
+        },
+      });
+      await receive({ blockId: block.id, slabId: slab.id }, sqm);
+    }
+  }
+
+  const totalSqm = sum(sqms);
+  const totalValue = sum(values);
+  const updated = await tx.lot.update({ where: { id: lot.id }, data: { totalSqm, landedCostTotal: totalValue } });
+  await tx.lotCostHistory.create({
+    data: {
+      lotId: lot.id,
+      date: a.date,
+      source: a.source,
+      amount: totalValue,
+      costPerSqmAfter: updated.costPerSqm,
+      reason: a.source === "OPENING" ? "Opening stock" : "Goods receipt",
+      userId: ctx.userId,
+    },
+  });
+  return { lot: updated, values, totalSqm, totalValue };
+}
+
 /** Create a lot (with its blocks and slabs, or tile SQM) as opening stock. Posts Dr Inventory / Cr Opening Balance Equity. */
 export async function createOpeningLot(ctx: Ctx, raw: unknown) {
   assertCan(ctx, "inventory.openingStock");
@@ -86,122 +231,22 @@ export async function createOpeningLot(ctx: Ctx, raw: unknown) {
       throw new AppError("VALIDATION", "Supplier not found");
     }
 
-    // Shape rules per product type
-    const blockNos = input.blocks.map((b) => b.blockNo.toUpperCase());
-    if (new Set(blockNos).size !== blockNos.length) throw new AppError("VALIDATION", "Block numbers must be unique within a lot");
-    if (product.type === "SLAB") {
-      if (input.tileSqm) throw new AppError("VALIDATION", "Slab stock is entered per slab, not as lot SQM");
-      if (input.blocks.length === 0) throw new AppError("VALIDATION", "Add at least one block");
-      for (const b of input.blocks) {
-        if (b.slabs.length === 0) throw new AppError("VALIDATION", `Block ${b.blockNo} has no slabs`);
-        if (b.sqm) throw new AppError("VALIDATION", `Block ${b.blockNo}: slab blocks take SQM from their slabs`);
-      }
-      const givenNos = input.blocks.flatMap((b) => b.slabs.map((s) => s.slabNo).filter(Boolean)) as string[];
-      if (new Set(givenNos).size !== givenNos.length) throw new AppError("VALIDATION", "Slab numbers must be unique");
-    } else {
-      if (input.blocks.some((b) => b.slabs.length > 0)) throw new AppError("VALIDATION", "Tiles are not tracked per slab");
-      if (input.blocks.length === 0 && !input.tileSqm) throw new AppError("VALIDATION", "Enter the lot SQM or add blocks with SQM");
-      if (input.blocks.length > 0 && input.tileSqm) throw new AppError("VALIDATION", "Enter SQM either at lot level or per block, not both");
-      for (const b of input.blocks) if (!b.sqm) throw new AppError("VALIDATION", `Block ${b.blockNo}: SQM is required`);
-    }
-
-    const lotNo = input.lotNo ?? (await nextDocNumber(tx, "LOT", date));
-    if (await tx.lot.findUnique({ where: { lotNo } })) throw new AppError("CONFLICT", `Lot number ${lotNo} already exists`);
-
-    const lot = await tx.lot.create({
-      data: {
-        lotNo,
-        productId: product.id,
-        supplierId: input.supplierId,
-        warehouseId: warehouse.id,
-        source: "OPENING",
-        receivedDate: date,
-        totalSqm: ZERO,
-        landedCostTotal: ZERO,
-        costPerSqm: round4(input.costPerSqm),
-        remarks: input.remarks,
-        createdById: ctx.userId,
-      },
-    });
-
-    const values: Dec[] = [];
-    const sqms: Dec[] = [];
-    const receive = async (bucket: { blockId: string | null; slabId: string | null }, sqm: Dec) => {
-      const balance = await tx.stockBalance.create({
-        data: {
-          bucketKey: bucket.slabId ? bucketKeyForSlab(bucket.slabId) : bucketKeyForLot(lot.id, bucket.blockId, warehouse.id),
-          productId: product.id,
-          lotId: lot.id,
-          blockId: bucket.blockId,
-          slabId: bucket.slabId,
-          warehouseId: warehouse.id,
-        },
-        include: { lot: { select: { costPerSqm: true } } },
-      });
-      const { value } = await writeMovement(tx, ctx, balance, {
-        type: "OPENING",
-        sqm,
-        date,
-        refType: "LOT",
-        refId: lot.id,
-      });
-      values.push(value);
-      sqms.push(sqm);
-    };
-
-    if (product.type === "TILE" && input.tileSqm) {
-      await receive({ blockId: null, slabId: null }, round4(input.tileSqm));
-    }
-    for (const b of input.blocks) {
-      const block = await tx.block.create({
-        data: { blockNo: b.blockNo, lotId: lot.id, origin: b.origin, remarks: b.remarks },
-      });
-      if (product.type === "TILE") {
-        await receive({ blockId: block.id, slabId: null }, round4(b.sqm!));
-        continue;
-      }
-      for (const s of b.slabs) {
-        const sqm = slabArea(ctx, s);
-        const slabNo = await newSlabNo(tx, date, s.slabNo);
-        const slab = await tx.slab.create({
-          data: {
-            slabNo,
-            barcode: slabNo,
-            blockId: block.id,
-            lotId: lot.id,
-            productId: product.id,
-            warehouseId: warehouse.id,
-            lengthCm: s.lengthCm,
-            widthCm: s.widthCm,
-            thicknessMm: s.thicknessMm ?? product.thicknessMm,
-            totalSqm: sqm,
-            shade: s.shade,
-            remarks: s.remarks,
-          },
-        });
-        await receive({ blockId: block.id, slabId: slab.id }, sqm);
-      }
-    }
-
-    const totalSqm = sum(sqms);
-    const totalValue = sum(values);
-    const updated = await tx.lot.update({ where: { id: lot.id }, data: { totalSqm, landedCostTotal: totalValue } });
-    await tx.lotCostHistory.create({
-      data: {
-        lotId: lot.id,
-        date,
-        source: "OPENING",
-        amount: totalValue,
-        costPerSqmAfter: updated.costPerSqm,
-        reason: "Opening stock",
-        userId: ctx.userId,
-      },
+    const { lot, values, totalSqm, totalValue } = await createLotStock(tx, ctx, {
+      product,
+      warehouseId: warehouse.id,
+      supplierId: input.supplierId,
+      date,
+      costPerSqm: input.costPerSqm,
+      body: input,
+      source: "OPENING",
+      movementType: "OPENING",
+      refType: "LOT",
     });
     await postInventoryChange(tx, ctx, {
       date,
       sourceType: "OPENING_STOCK",
       sourceId: lot.id,
-      memo: `Opening stock — lot ${lotNo}`,
+      memo: `Opening stock — lot ${lot.lotNo}`,
       values,
       offsetAccount: "OPENING_BALANCE_EQUITY",
     });
@@ -209,9 +254,9 @@ export async function createOpeningLot(ctx: Ctx, raw: unknown) {
       action: "create",
       entity: "Lot",
       entityId: lot.id,
-      after: { lotNo, product: product.itemCode, totalSqm, totalValue, blocks: input.blocks.length },
+      after: { lotNo: lot.lotNo, product: product.itemCode, totalSqm, totalValue, blocks: input.blocks.length },
     });
-    return updated;
+    return lot;
   });
 }
 

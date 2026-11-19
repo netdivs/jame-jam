@@ -19,6 +19,8 @@ if (!testDb) throw new Error("TEST_DATABASE_URL is not set");
 
 export default defineConfig({
   resolve: { alias: { "@": path.resolve(__dirname, "src") } },
+  // The PDF templates are .tsx (TX-01): compile JSX with the automatic runtime, like Next.js does.
+  esbuild: { jsx: "automatic" },
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],

@@ -1,14 +1,14 @@
 // Idempotent base data: permissions, roles, chart of accounts, tax codes, settings, warehouse, users.
 import bcrypt from "bcryptjs";
 import type { PrismaClient } from "@prisma/client";
-import { CHART_OF_ACCOUNTS, LANDED_COST_CATEGORIES, TAX_CODES } from "./accounting/seed-data";
+import { CHART_OF_ACCOUNTS, EXPENSE_CATEGORIES, LANDED_COST_CATEGORIES, TAX_CODES } from "./accounting/seed-data";
 import { PERMISSIONS, ROLES } from "./rbac";
 
 type Acc = (typeof CHART_OF_ACCOUNTS)[number];
 
 export async function seedBase(
   db: PrismaClient,
-  opts: { demoUsers: boolean; password: string },
+  opts: { demoUsers: boolean; password: string; /** false: create no users at all (base seed on an existing install). */ createUsers?: boolean },
 ): Promise<void> {
   // Permissions & roles (role permissions are reset to the default matrix)
   for (const [key, description] of Object.entries(PERMISSIONS)) {
@@ -24,10 +24,11 @@ export async function seedBase(
       update: { name: r.name, description: r.description, system: true },
       create: { key: r.key, name: r.name, description: r.description, system: true },
     });
-    await db.rolePermission.deleteMany({ where: { roleId: role.id } });
-    await db.rolePermission.createMany({
-      data: r.permissions.map((permissionKey) => ({ roleId: role.id, permissionKey })),
-    });
+    // One transaction per role, so a failure never leaves a role without permissions (audit F20).
+    await db.$transaction([
+      db.rolePermission.deleteMany({ where: { roleId: role.id } }),
+      db.rolePermission.createMany({ data: r.permissions.map((permissionKey) => ({ roleId: role.id, permissionKey })) }),
+    ]);
   }
 
   // Chart of accounts
@@ -41,6 +42,22 @@ export async function seedBase(
     for (const c of a.children ?? []) await upsertAcc(c as Acc, row.id);
   };
   for (const a of CHART_OF_ACCOUNTS) await upsertAcc(a, null);
+
+  // Default bank account on the "Bank - Main Account" GL account (T8-03)
+  const mainBank = await db.account.findUniqueOrThrow({ where: { systemKey: "BANK_MAIN" } });
+  if (!(await db.bankAccount.findUnique({ where: { accountId: mainBank.id } }))) {
+    await db.bankAccount.create({ data: { id: "bank_main", code: "BANK-0001", name: "Main account", accountId: mainBank.id, isDefault: true } });
+  }
+
+  // First petty cash box on the "Petty Cash" GL account, and default expense categories (T8-04)
+  const petty = await db.account.findUniqueOrThrow({ where: { systemKey: "PETTY_CASH" } });
+  if (!(await db.pettyCashAccount.findUnique({ where: { accountId: petty.id } }))) {
+    await db.pettyCashAccount.create({ data: { id: "petty_main", code: "PETTY-01", name: "Main petty cash", accountId: petty.id } });
+  }
+  for (const c of EXPENSE_CATEGORIES) {
+    const acc = await db.account.findUniqueOrThrow({ where: { systemKey: c.key } });
+    await db.expenseCategory.upsert({ where: { name: c.name }, update: {}, create: { id: `expcat_${c.key.toLowerCase()}`, name: c.name, accountId: acc.id } });
+  }
 
   // Tax codes
   for (const t of TAX_CODES) {
@@ -82,6 +99,7 @@ export async function seedBase(
   });
 
   // Users: one owner always; one per role for the demo
+  if (opts.createUsers === false) return;
   const hash = await bcrypt.hash(opts.password, 10);
   const users = opts.demoUsers
     ? [
@@ -100,4 +118,20 @@ export async function seedBase(
       create: { email: u.email, name: u.name, roleId: role.id, passwordHash: hash },
     });
   }
+}
+
+/**
+ * Production-safe seed (TS-04, audit F19): base data only — no demo users, no demo stock, never prints secrets.
+ * The password is needed only when the owner user does not exist yet (first install) and must be ≥ 12 characters.
+ * Returns what it did, for the caller to log.
+ */
+export async function seedBaseOnly(db: PrismaClient, password: string | undefined): Promise<{ ownerCreated: boolean; roles: number; permissions: number }> {
+  const ownerExists = (await db.user.count({ where: { role: { key: "owner" } } })) > 0;
+  if (!ownerExists && (!password || password.length < 12)) {
+    throw new Error("No owner user exists yet: set SEED_PASSWORD (at least 12 characters) for the first owner account.");
+  }
+  // With an owner already there, no user is created or touched (an owner who changed their email must not get a
+  // second "owner@jamejam.local" account).
+  await seedBase(db, { demoUsers: false, password: password ?? "", createUsers: !ownerExists });
+  return { ownerCreated: !ownerExists, roles: ROLES.length, permissions: Object.keys(PERMISSIONS).length };
 }
