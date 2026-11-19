@@ -39,7 +39,7 @@ export const optText = (max = 200) =>
     .transform((v) => (v ? v : undefined));
 
 export const reqText = (label: string, max = 200) =>
-  z.string({ required_error: `${label} is required` }).trim().min(1, `${label} is required`).max(max);
+  z.string({ error: `${label} is required` }).trim().min(1, `${label} is required`).max(max);
 
 /** UAE TRN: optional, exactly 15 digits when given (format check only — no FTA lookup). */
 export const trn = z

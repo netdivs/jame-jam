@@ -53,7 +53,7 @@ export async function saveCustomer(ctx: Ctx, id: string | null, raw: unknown) {
 export const supplierSchema = z.object({
   code: optText(20),
   name: reqText("Supplier name", 160),
-  supplierType: z.enum(["LOCAL", "IMPORT"], { errorMap: () => ({ message: "Choose local or import" }) }),
+  supplierType: z.enum(["LOCAL", "IMPORT"], { error: "Choose local or import" }),
   contactPerson: optText(100),
   mobile: optText(30),
   email: z.union([z.string().trim().email("Invalid email"), z.literal("")]).optional().transform((v) => v || undefined),
@@ -88,7 +88,7 @@ export async function saveSupplier(ctx: Ctx, id: string | null, raw: unknown) {
 export const productSchema = z.object({
   itemCode: reqText("Item code", 30).transform((v) => v.toUpperCase()),
   name: reqText("Product name", 160),
-  type: z.enum(["TILE", "SLAB"], { errorMap: () => ({ message: "Choose tile or slab" }) }),
+  type: z.enum(["TILE", "SLAB"], { error: "Choose tile or slab" }),
   category: optText(80),
   stoneType: optText(80),
   finish: optText(80),

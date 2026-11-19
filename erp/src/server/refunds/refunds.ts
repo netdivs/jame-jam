@@ -23,7 +23,7 @@ import { dateStr, decimal, optText, parse, reqText } from "../validation";
 const base = {
   date: dateStr,
   amount: decimal({ gt: 0, dp: 2, label: "Amount" }),
-  mode: z.enum(["CASH", "BANK"], { errorMap: () => ({ message: "Choose cash or bank" }) }),
+  mode: z.enum(["CASH", "BANK"], { error: "Choose cash or bank" }),
   bankAccountId: optText(40),
   reference: optText(80),
   reason: reqText("Reason", 500),

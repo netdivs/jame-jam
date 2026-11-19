@@ -19,7 +19,7 @@ export const paymentSchema = z
     openingItemId: optText(),
     date: dateStr,
     amount: decimal({ gt: 0, dp: 2, label: "Amount" }),
-    mode: z.enum(["CASH", "BANK"], { errorMap: () => ({ message: "Choose cash or bank" }) }),
+    mode: z.enum(["CASH", "BANK"], { error: "Choose cash or bank" }),
     /** Bank payments: which bank account (default bank account when omitted). */
     bankAccountId: optText(40),
     reference: optText(80),

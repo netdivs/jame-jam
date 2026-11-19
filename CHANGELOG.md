@@ -20,6 +20,9 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Security — dependency upgrades (TS-05)
+- zod 3 → 4.6.7 (validation code migrated); postcss 8.5.23 (inside Next.js) and deepmerge-ts 8.0.2 (inside the Prisma CLI) through npm overrides. `npm audit --omit=dev` reports 0 vulnerabilities; the CI audit step now fails on high findings. TD-038. All gates green (Vitest 121, Playwright 32 twice).
+
 ### Added — Excel imports for go-live (T11-02)
 - Settings → Imports: download a template, fill it, **Check** (lists every problem by row and column, saves nothing), then **Import** (saves all rows or none). Customers, suppliers, products, opening balances and opening stock (slabs / tile blocks grouped into lots). Every check and import is recorded. Migration `import_batches` (additive). TD-037.
 - Services can now join one outer transaction (bulk imports); a savepoint per row keeps one bad row from hiding the others.

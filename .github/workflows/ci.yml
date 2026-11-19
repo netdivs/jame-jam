@@ -55,9 +55,8 @@ jobs:
         run: npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "$SHADOW_DATABASE_URL" --exit-code
       - name: Build
         run: npm run build
-      - name: Dependency audit (report only until TS-05 upgrades land)
+      - name: Dependency audit (production dependencies, high and above fail the build)
         run: npm audit --omit=dev --audit-level=high
-        continue-on-error: true
 
   e2e:
     name: Playwright E2E

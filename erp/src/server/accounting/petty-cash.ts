@@ -22,7 +22,7 @@ export const topUpSchema = z.object({
   pettyCashAccountId: reqText("Petty cash box"),
   date: dateStr,
   amount: decimal({ gt: 0, dp: 2, label: "Amount" }),
-  mode: z.enum(["CASH", "BANK"], { errorMap: () => ({ message: "Choose cash or bank" }) }),
+  mode: z.enum(["CASH", "BANK"], { error: "Choose cash or bank" }),
   bankAccountId: optText(40),
   reference: optText(80),
   description: optText(500),

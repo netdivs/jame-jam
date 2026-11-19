@@ -26,7 +26,7 @@ const lineSchema = z.object({
   date: dateStr,
   description: reqText("Description", 300),
   reference: optText(80),
-  direction: z.enum(["IN", "OUT"], { errorMap: () => ({ message: "Money in or out?" }) }),
+  direction: z.enum(["IN", "OUT"], { error: "Money in or out?" }),
   amount: decimal({ gt: 0, dp: 2, label: "Amount" }),
 });
 

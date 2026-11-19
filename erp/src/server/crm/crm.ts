@@ -23,7 +23,7 @@ const optDecimal = (opts: Parameters<typeof decimal>[0]) => z.union([decimal(opt
 const optDate = z.union([z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a valid date"), z.literal("")]).optional().transform((v) => (v ? new Date(`${v}T00:00:00Z`) : undefined));
 const dateTime = (label: string) =>
   z
-    .string({ required_error: `${label} is required` })
+    .string({ error: `${label} is required` })
     .trim()
     .min(1, `${label} is required`)
     .transform((v, c) => {
@@ -86,7 +86,7 @@ export const leadSchema = z.object({
   contactPerson: optText(100),
   mobile: optText(30),
   email,
-  source: z.enum(LEAD_SOURCES, { errorMap: () => ({ message: "Choose a source" }) }),
+  source: z.enum(LEAD_SOURCES, { error: "Choose a source" }),
   requirement: optText(2000),
   productId: optText(40),
   expectedSqm: optDecimal({ gt: 0, dp: 4, label: "Expected SQM" }),
@@ -323,7 +323,7 @@ async function resolveTarget(tx: Tx, ctx: Ctx, t: Target): Promise<{ customerId:
 
 export const interactionSchema = z.object({
   ...target,
-  type: z.enum(["CALL", "MEETING", "SITE_VISIT", "EMAIL", "NOTE"], { errorMap: () => ({ message: "Choose the type" }) }),
+  type: z.enum(["CALL", "MEETING", "SITE_VISIT", "EMAIL", "NOTE"], { error: "Choose the type" }),
   at: dateTime("Date and time"),
   notes: reqText("Notes", 2000),
   outcome: optText(500),
