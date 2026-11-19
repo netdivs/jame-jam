@@ -78,8 +78,8 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T9-01 | VAT summary (FTA boxes), output/input registers with drill-down, adjustments | High | T5-06, T7-02 | PLANNED | O | R7: reconciles to VAT GL | G |
-| T9-02 | Accountant export pack (Excel) | High | T9-01, TX-02 | PLANNED | O | Opens in Excel; matches screen | H |
+| T9-01 | VAT summary (FTA boxes), output/input registers with drill-down, adjustments | High | T5-06, T7-02 | DONE (19 Nov 2026, TD-051): `/accounts/vat`; sales side live once tax invoicing is switched on | O | R7: reconciles to VAT GL | G |
+| T9-02 | Accountant export pack (Excel) | High | T9-01, TX-02 | DONE (19 Nov 2026, TD-051): Excel `vat-pack` | O | Opens in Excel; matches screen | H |
 | T9-03 | The 16 reports of spec §4 with Excel/PDF export | Med | various | PLANNED | O/K | Filters per spec | H |
 
 ## Step 10 — CRM
@@ -112,7 +112,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | TS-05 | Dependency upgrades for `npm audit --omit=dev` highs: zod 3 → 4 (breaking API), Next.js patch that bundles postcss ≥ 8.5.23, Prisma release without vulnerable deepmerge-ts; then make the CI audit step blocking | High | — | DONE (19 Nov 2026, TD-038): zod 4.6.7; postcss and deepmerge-ts via npm overrides (no upstream fix in Next 15 / Prisma 6 yet); CI audit blocking | C | `npm audit --omit=dev --audit-level=high` clean; all gates green | H E2E |
 | TP-01 | Business policy settings registry + Settings → System page (Phase 0) | High | — | DONE (19 Nov 2026, TD-039) | C | Defaults keep current behaviour; audited; Owner only | H R P A |
 | TP-02 | Policy settings Phase 1: credit purchases, invoice-above-PO tolerance, category allocation basis, bank charges as expense, cash refund limit | High | TP-01 | DONE (19 Nov 2026, TD-040…044) | C | Each rule off by default; tests per rule | H R P G A |
-| TP-03 | Phase 2: Tax Invoice, DN, Returns, CN, reservation expiry, VAT reports behind feature switch `features.salesInvoicing` (off in production), pending rules C2/C4/C7 as settings defaulting to the proposals | High | TP-01 | IN PROGRESS: TI + knock-off + VAT settings + DN done (19 Nov 2026); returns, credit notes, reservation expiry done; next VAT reports (T9-01/02) | C | Switch off = no change; docs say "proposal, client approval pending" | per task |
+| TP-03 | Phase 2: Tax Invoice, DN, Returns, CN, reservation expiry, VAT reports behind feature switch `features.salesInvoicing` (off in production), pending rules C2/C4/C7 as settings defaulting to the proposals | High | TP-01 | DONE (19 Nov 2026): TI, knock-off, DN, returns, credit notes, reservation expiry, VAT return + pack; all behind settings, off by default | C | Switch off = no change; docs say "proposal, client approval pending" | per task |
 | TJ-01 | Scheduled job runner (PI expiry, SO expiry, PDC/CRM reminders) | High | — | DONE (jobs service in docker-compose.prod.yml is applied at the release) | C | Idempotent; runs as `systemCtx`; logged | H |
 | TX-01 | Choose PDF library (ADR) | Med | — | DONE (19 Nov 2026, TD-035: @react-pdf/renderer) | C | Entry in DECISIONS.md | — |
 | TX-02 | Choose Excel library (ADR) | Med | — | DONE (19 Nov 2026, TD-036: exceljs) | C | Entry in DECISIONS.md | — |

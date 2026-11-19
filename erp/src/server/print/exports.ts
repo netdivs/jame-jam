@@ -6,8 +6,9 @@ import { partyBalances, partyStatement, type PartyType } from "../accounting/led
 import { stockByProduct } from "../inventory/queries";
 import { dailyCashReport } from "../accounting/petty-cash";
 import type { XlsxSheet } from "./xlsx";
+import { vatReturn, type VatRow } from "../accounting/vat-report";
 
-export const EXPORTS = ["trial-balance", "profit-loss", "balance-sheet", "statement", "ledgers", "stock", "pdc", "daily-cash"] as const;
+export const EXPORTS = ["trial-balance", "profit-loss", "balance-sheet", "statement", "ledgers", "stock", "pdc", "daily-cash", "vat-pack"] as const;
 
 const isoOk = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -131,6 +132,50 @@ export async function buildExport(ctx: Ctx, report: string, q: URLSearchParams):
           rows: [{ doc: "", memo: "Opening balance", in: null, out: null, balance: s(a.opening) }, ...a.rows.map((r) => ({ doc: r.number, memo: r.memo, in: r.debit.isZero() ? null : s(r.debit), out: r.credit.isZero() ? null : s(r.credit), balance: s(r.balance) }))],
           totals: { in: s(a.cashIn), out: s(a.cashOut), balance: s(a.closing) },
         })),
+      };
+    }
+    case "vat-pack": {
+      // Accountant pack (T9-02): the VAT return, both registers and the trial balance at the period end.
+      const v = await vatReturn(ctx, toDateOnly(from), toDateOnly(to));
+      const tb = await trialBalance(ctx, toDateOnly(to));
+      const b = v.boxes;
+      const box = (n: string, label: string, net: { toString(): string } | null, vat: { toString(): string } | null, adj: { toString(): string } | null = null) => ({ box: n, label, net: net === null ? null : s(net), vat: vat === null ? null : s(vat), adj: adj === null ? null : s(adj) });
+      const reg = (name: string, rows: VatRow[]): XlsxSheet => ({
+        name, title: name, filters: [`From ${from} to ${to}`],
+        columns: [{ key: "date", label: "Date", kind: "date", width: 13 }, { key: "doc", label: "Document", width: 14 }, { key: "kind", label: "Type", width: 30 }, { key: "party", label: "Party", width: 34 }, { key: "trn", label: "TRN", width: 18 }, { key: "code", label: "Tax code", width: 9 }, { key: "net", label: "Net (AED)", kind: "money" }, { key: "vat", label: "VAT (AED)", kind: "money" }],
+        rows: rows.map((r) => ({ date: r.date, doc: r.number, kind: r.kind, party: r.party, trn: r.trn ?? "", code: r.code, net: s(r.net), vat: s(r.vat) })),
+        totals: { net: s(rows.reduce((a, r) => a.plus(r.net), D(0))), vat: s(rows.reduce((a, r) => a.plus(r.vat), D(0))) },
+      });
+      return {
+        fileName: `vat-pack-${from}-to-${to}`,
+        sheets: [
+          {
+            name: "VAT return", title: "VAT return (FTA VAT 201 layout)", filters: [`From ${from} to ${to}`, "Box 1 is reported in the company's emirate (emirate split not tracked)", v.reconciliation.ok ? "Ties to the VAT accounts" : "Does NOT tie to the VAT accounts — see the screen"],
+            columns: [{ key: "box", label: "Box", width: 6 }, { key: "label", label: "Description", width: 52 }, { key: "net", label: "Amount (AED)", kind: "money" }, { key: "vat", label: "VAT (AED)", kind: "money" }, { key: "adj", label: "Adjustment (AED)", kind: "money" }],
+            rows: [
+              box("1", "Standard rated supplies", b.b1.net, b.b1.vat, b.b1.adjustment ?? null),
+              box("3", "Supplies subject to the reverse charge", b.b3.net, b.b3.vat),
+              box("4", "Zero rated supplies", b.b4.net, null),
+              box("5", "Exempt supplies", b.b5.net, null),
+              box("6", "Goods imported into the UAE", b.b6.net, b.b6.vat),
+              box("8", "Totals (output)", b.b8.net, b.b8.vat),
+              box("9", "Standard rated expenses", b.b9.net, b.b9.vat),
+              box("10", "Supplies subject to the reverse charge (recoverable)", b.b10.net, b.b10.vat),
+              box("11", "Totals (input)", b.b11.net, b.b11.vat),
+              box("12", "Total value of due tax", null, b.b12),
+              box("13", "Total value of recoverable tax", null, b.b13),
+              box("14", "Payable tax for the period", null, b.b14),
+            ],
+          },
+          reg("Output VAT", v.output),
+          reg("Input VAT", v.input),
+          {
+            name: "Trial balance", title: "Trial balance", filters: [`As at ${to}`],
+            columns: [{ key: "code", label: "Code", width: 10 }, { key: "name", label: "Account", width: 40 }, { key: "debit", label: "Debit", kind: "money" }, { key: "credit", label: "Credit", kind: "money" }],
+            rows: tb.rows.map((r) => ({ code: r.code, name: r.name, debit: r.debit.isZero() ? null : s(r.debit), credit: r.credit.isZero() ? null : s(r.credit) })),
+            totals: { debit: s(tb.totalDebit), credit: s(tb.totalCredit) },
+          },
+        ],
       };
     }
     default:

@@ -9,6 +9,7 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - Delivery notes: only for a fully paid tax invoice; partial dispatch; stock out with COGS; PDF gate pass (TD-048).
 - Sales returns (approval by Owner/Manager, receipt with condition, stock back at cost) and tax credit notes (return-based, or adjustments with approval); C7 treatment is a setting (TD-049).
 - Sales order reservation expiry (nightly job, extension by Owner/Manager, dashboard warning), off until the client confirms C2 (TD-050).
+- VAT return in the FTA VAT 201 layout with output/input registers and a check against the VAT accounts; Excel accountant pack (TD-051).
 - Settings → System → Modules: tax invoicing stays off until the client confirms the VAT method (C4).
 - VAT rounding per line or per document, and the price display on printed tax invoices, are settings (TD-046, TD-047).
 
