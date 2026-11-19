@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const settings = await prisma.companySetting.findUnique({ where: { id: 1 } });
 
   const nav: NavGroup[] = [
-    { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
+    { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }, { href: "/reports", label: "Reports", icon: "reports" }] },
     {
       label: "Inventory",
       items: has("inventory.view")

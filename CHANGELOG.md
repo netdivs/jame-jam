@@ -10,6 +10,8 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - Sales returns (approval by Owner/Manager, receipt with condition, stock back at cost) and tax credit notes (return-based, or adjustments with approval); C7 treatment is a setting (TD-049).
 - Sales order reservation expiry (nightly job, extension by Owner/Manager, dashboard warning), off until the client confirms C2 (TD-050).
 - VAT return in the FTA VAT 201 layout with output/input registers and a check against the VAT accounts; Excel accountant pack (TD-051).
+- Reports hub with the 16 spec reports: new purchase, sales, profit per invoice, bank, expense, lot-wise stock / valuation, reservations and customer advances reports, each with filters, Excel and print (TD-052).
+- Demo data now includes invoices, delivery, a return with its credit note and a pending credit note (TD-053).
 - Settings → System → Modules: tax invoicing stays off until the client confirms the VAT method (C4).
 - VAT rounding per line or per document, and the price display on printed tax invoices, are settings (TD-046, TD-047).
 

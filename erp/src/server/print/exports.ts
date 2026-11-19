@@ -7,8 +7,9 @@ import { stockByProduct } from "../inventory/queries";
 import { dailyCashReport } from "../accounting/petty-cash";
 import type { XlsxSheet } from "./xlsx";
 import { vatReturn, type VatRow } from "../accounting/vat-report";
+import { bankReport, expenseReport, lotStock, profitPerInvoice, purchaseReport, reservationsBySo, salesReport, unallocatedAdvances } from "../reports";
 
-export const EXPORTS = ["trial-balance", "profit-loss", "balance-sheet", "statement", "ledgers", "stock", "pdc", "daily-cash", "vat-pack"] as const;
+export const EXPORTS = ["trial-balance", "profit-loss", "balance-sheet", "statement", "ledgers", "stock", "pdc", "daily-cash", "vat-pack", "purchases", "sales", "profit", "expenses", "bank", "lots", "reservations", "advances"] as const;
 
 const isoOk = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -176,6 +177,105 @@ export async function buildExport(ctx: Ctx, report: string, q: URLSearchParams):
             totals: { debit: s(tb.totalDebit), credit: s(tb.totalCredit) },
           },
         ],
+      };
+    }
+    case "purchases": {
+      const r = await purchaseReport(ctx, { from: toDateOnly(from), to: toDateOnly(to), supplierId: q.get("supplier") || undefined, productId: q.get("product") || undefined });
+      return {
+        fileName: `purchase-report-${from}-to-${to}`,
+        sheets: [
+          {
+            name: "Purchases", title: "Purchase report", filters: [`From ${from} to ${to}`, "Reverse charge VAT is self-assessed, not paid to the supplier"],
+            columns: [{ key: "date", label: "Date", kind: "date", width: 12 }, { key: "doc", label: "Invoice", width: 13 }, { key: "supInv", label: "Supplier inv.", width: 14 }, { key: "supplier", label: "Supplier", width: 28 }, { key: "po", label: "PO", width: 12 }, { key: "product", label: "Product", width: 32 }, { key: "code", label: "Tax", width: 6 }, { key: "sqm", label: "SQM", kind: "sqm" }, { key: "price", label: "Price/SQM", kind: "money" }, { key: "net", label: "Net", kind: "money" }, { key: "vat", label: "VAT", kind: "money" }, { key: "rc", label: "RC VAT", kind: "money" }],
+            rows: r.rows.map((x) => ({ _href: x.href, date: x.date, doc: x.number, supInv: x.supplierInvoiceNo, supplier: x.supplier, po: x.po, product: x.product, code: x.taxCode, sqm: s(x.sqm), price: s(x.unitPrice), net: s(x.net), vat: s(x.vat), rc: s(x.rcVat) })),
+            totals: { sqm: s(r.totals.sqm), net: s(r.totals.net), vat: s(r.totals.vat), rc: s(r.totals.rcVat) },
+          },
+          { name: "By supplier", title: "Purchases by supplier", filters: [`From ${from} to ${to}`], columns: [{ key: "supplier", label: "Supplier", width: 36 }, { key: "net", label: "Net", kind: "money" }, { key: "vat", label: "VAT", kind: "money" }], rows: r.bySupplier.map((x) => ({ supplier: x.supplier, net: s(x.net), vat: s(x.vat) })), totals: { net: s(r.totals.net), vat: s(r.totals.vat) } },
+        ],
+      };
+    }
+    case "sales": {
+      const r = await salesReport(ctx, { from: toDateOnly(from), to: toDateOnly(to), customerId: q.get("customer") || undefined, productId: q.get("product") || undefined });
+      return {
+        fileName: `sales-report-${from}-to-${to}`,
+        sheets: [{
+          name: "Sales", title: "Sales report", filters: [`From ${from} to ${to}`, "Credit notes are shown as negative lines"],
+          columns: [{ key: "date", label: "Date", kind: "date", width: 12 }, { key: "doc", label: "Document", width: 13 }, { key: "kind", label: "Type", width: 18 }, { key: "customer", label: "Customer", width: 30 }, { key: "product", label: "Product", width: 32 }, { key: "code", label: "Tax", width: 6 }, { key: "sqm", label: "SQM", kind: "sqm" }, { key: "net", label: "Net", kind: "money" }, { key: "vat", label: "VAT", kind: "money" }, { key: "gross", label: "Total", kind: "money" }],
+          rows: r.rows.map((x) => ({ _href: x.href, date: x.date, doc: x.number, kind: x.kind, customer: x.customer, product: x.product, code: x.taxCode, sqm: s(x.sqm), net: s(x.net), vat: s(x.vat), gross: s(x.gross) })),
+          totals: { sqm: s(r.totals.sqm), net: s(r.totals.net), vat: s(r.totals.vat), gross: s(r.totals.gross) },
+        }],
+      };
+    }
+    case "profit": {
+      const r = await profitPerInvoice(ctx, { from: toDateOnly(from), to: toDateOnly(to), customerId: q.get("customer") || undefined });
+      return {
+        fileName: `profit-per-invoice-${from}-to-${to}`,
+        sheets: [{
+          name: "Profit per invoice", title: "Profit per invoice", filters: [`From ${from} to ${to}`, "Cost = delivered cost − goods returned + current lot cost of SQM not delivered yet (marked *)"],
+          columns: [{ key: "date", label: "Date", kind: "date", width: 12 }, { key: "doc", label: "Invoice", width: 13 }, { key: "customer", label: "Customer", width: 32 }, { key: "sales", label: "Net sales", kind: "money" }, { key: "credits", label: "of which credited", kind: "money" }, { key: "cost", label: "Cost", kind: "money" }, { key: "profit", label: "Gross profit", kind: "money" }, { key: "margin", label: "Margin %", width: 10 }],
+          rows: r.rows.map((x) => ({ _href: x.href, date: x.date, doc: x.number, customer: x.customer, sales: s(x.netSales), credits: x.credits.isZero() ? null : s(x.credits), cost: s(x.cost), profit: s(x.profit), margin: x.margin === null ? "" : `${x.margin.toString()}%${x.estimated ? " *" : ""}` })),
+          totals: { sales: s(r.totals.netSales), cost: s(r.totals.cost), profit: s(r.totals.profit), margin: r.totals.margin === null ? "" : `${r.totals.margin.toString()}%` },
+        }],
+      };
+    }
+    case "expenses": {
+      const r = await expenseReport(ctx, { from: toDateOnly(from), to: toDateOnly(to) });
+      return {
+        fileName: `expense-report-${from}-to-${to}`,
+        sheets: [
+          { name: "By account", title: "Expenses by account", filters: [`From ${from} to ${to}`, "Cost of goods sold is not included"], columns: [{ key: "code", label: "Code", width: 10 }, { key: "name", label: "Account", width: 40 }, { key: "amount", label: "Amount", kind: "money" }], rows: r.accounts.map((a) => ({ code: a.code, name: a.name, amount: s(a.amount) })), totals: { amount: s(r.total) } },
+          { name: "Postings", title: "Expense postings", filters: [`From ${from} to ${to}`], columns: [{ key: "date", label: "Date", kind: "date", width: 12 }, { key: "doc", label: "Entry", width: 13 }, { key: "account", label: "Account", width: 30 }, { key: "memo", label: "Details", width: 50 }, { key: "amount", label: "Amount", kind: "money" }], rows: r.accounts.flatMap((a) => a.rows.map((x) => ({ _href: x.href, date: x.date, doc: x.number, account: `${a.code} ${a.name}`, memo: x.memo, amount: s(x.amount) }))), totals: { amount: s(r.total) } },
+          { name: "Petty cash", title: "Petty cash by category", filters: [`From ${from} to ${to}`], columns: [{ key: "category", label: "Category", width: 32 }, { key: "net", label: "Net", kind: "money" }, { key: "vat", label: "VAT", kind: "money" }, { key: "paid", label: "Paid", kind: "money" }], rows: r.pettyByCategory.map((x) => ({ category: x.category, net: s(x.net), vat: s(x.vat), paid: s(x.paid) })) },
+        ],
+      };
+    }
+    case "bank": {
+      const r = await bankReport(ctx, { from: toDateOnly(from), to: toDateOnly(to), bankAccountId: q.get("bank") || undefined });
+      return {
+        fileName: `bank-report-${from}-to-${to}`,
+        sheets: r.map((b) => ({
+          name: b.name.slice(0, 28).replace(/[\\/?*[\]:]/g, " "), title: `Bank — ${b.name} (${b.code})`, filters: [`From ${from} to ${to}`],
+          columns: [{ key: "date", label: "Date", kind: "date" as const, width: 12 }, { key: "doc", label: "Entry", width: 13 }, { key: "memo", label: "Details", width: 50 }, { key: "in", label: "In", kind: "money" as const }, { key: "out", label: "Out", kind: "money" as const }, { key: "balance", label: "Balance", kind: "money" as const }],
+          rows: [{ date: null, doc: "", memo: "Opening balance", in: null, out: null, balance: s(b.opening) }, ...b.rows.map((x) => ({ _href: x.href, date: x.date, doc: x.number, memo: x.memo, in: x.in.isZero() ? null : s(x.in), out: x.out.isZero() ? null : s(x.out), balance: s(x.balance) }))],
+          totals: { in: s(b.in), out: s(b.out), balance: s(b.closing) },
+        })),
+      };
+    }
+    case "lots": {
+      const r = await lotStock(ctx, { asOf: toDateOnly(to), productId: q.get("product") || undefined, warehouseId: q.get("warehouse") || undefined });
+      const cost = r.totals.value !== null;
+      return {
+        fileName: `lot-stock-${to}`,
+        sheets: [{
+          name: "Lots", title: cost ? "Lot-wise stock and inventory valuation" : "Lot-wise stock", filters: [`As at ${to}`, ...(r.ties === null ? [] : [r.ties ? "Valuation ties to the Inventory account" : "Valuation does NOT tie to the Inventory account"])],
+          columns: [{ key: "lot", label: "Lot", width: 14 }, { key: "product", label: "Product", width: 34 }, { key: "warehouse", label: "Warehouse", width: 16 }, { key: "supplier", label: "From", width: 22 }, { key: "received", label: "Received", kind: "date", width: 12 }, { key: "sqm", label: "On hand SQM", kind: "sqm" }, { key: "reserved", label: "Reserved now", kind: "sqm" }, ...(cost ? [{ key: "cost", label: "Cost/SQM", kind: "money" as const }, { key: "value", label: "Value", kind: "money" as const }] : [])],
+          rows: r.rows.map((x) => ({ _href: x.href, lot: x.lotNo, product: x.product, warehouse: x.warehouse, supplier: x.supplier, received: x.received, sqm: s(x.sqm), reserved: s(x.reserved), cost: x.costPerSqm === null ? null : s(x.costPerSqm), value: x.value === null ? null : s(x.value) })),
+          totals: { sqm: s(r.totals.sqm), ...(cost ? { value: s(r.totals.value!) } : {}) },
+        }],
+      };
+    }
+    case "reservations": {
+      const r = await reservationsBySo(ctx);
+      return {
+        fileName: `reservations-${todayStr()}`,
+        sheets: [{
+          name: "Reservations", title: "Reservations by sales order", filters: ["Active reservations now"],
+          columns: [{ key: "so", label: "SO", width: 13 }, { key: "date", label: "Date", kind: "date", width: 12 }, { key: "customer", label: "Customer", width: 30 }, { key: "product", label: "Product", width: 30 }, { key: "where", label: "Lot / block / slab", width: 26 }, { key: "sqm", label: "Reserved SQM", kind: "sqm" }],
+          rows: r.flatMap((so) => so.lines.map((l) => ({ _href: so.href, so: so.number, date: so.date, customer: so.customer, product: l.product, where: l.where, sqm: s(l.sqm) }))),
+          totals: { sqm: s(r.reduce((a, x) => a.plus(x.sqm), D(0))) },
+        }],
+      };
+    }
+    case "advances": {
+      const r = await unallocatedAdvances(ctx);
+      return {
+        fileName: `customer-advances-${todayStr()}`,
+        sheets: [{
+          name: "Advances", title: "Customer advances not yet used", filters: ["Free = can be applied to an invoice or refunded"],
+          columns: [{ key: "code", label: "Code", width: 11 }, { key: "name", label: "Customer", width: 34 }, { key: "balance", label: "Advance held", kind: "money" }, { key: "pi", label: "On proformas", kind: "money" }, { key: "chq", label: "In open cheques", kind: "money" }, { key: "free", label: "Free", kind: "money" }],
+          rows: r.rows.map((x) => ({ _href: x.href, code: x.code, name: x.name, balance: s(x.balance), pi: s(x.onProformas), chq: s(x.pendingCheques), free: s(x.free) })),
+          totals: { balance: s(r.totals.balance), free: s(r.totals.free) },
+        }],
       };
     }
     default:

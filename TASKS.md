@@ -80,7 +80,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 |---|---|---|---|---|---|---|---|
 | T9-01 | VAT summary (FTA boxes), output/input registers with drill-down, adjustments | High | T5-06, T7-02 | DONE (19 Nov 2026, TD-051): `/accounts/vat`; sales side live once tax invoicing is switched on | O | R7: reconciles to VAT GL | G |
 | T9-02 | Accountant export pack (Excel) | High | T9-01, TX-02 | DONE (19 Nov 2026, TD-051): Excel `vat-pack` | O | Opens in Excel; matches screen | H |
-| T9-03 | The 16 reports of spec §4 with Excel/PDF export | Med | various | PLANNED | O/K | Filters per spec | H |
+| T9-03 | The 16 reports of spec §4 with Excel/PDF export | Med | various | DONE (19 Nov 2026, TD-052): `/reports` hub; new purchase, sales, profit per invoice, bank, expense, lot stock/valuation, reservations, advances; Excel + print | O/K | Filters per spec | H |
 
 ## Step 10 — CRM
 
@@ -94,7 +94,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 |---|---|---|---|---|---|---|---|
 | T11-01 | Opening AR/AP (invoice-wise), bank/cash/PDC balances, opening trial balance | High | T8-01, T8-03 | DONE (19 Nov 2026, TD-033; bulk Excel import is T11-02) | O | R8 | H G |
 | T11-02 | Excel import templates with validation, error report and dry run | Med | TX-02 | DONE (19 Nov 2026, TD-037): customers, suppliers, products, opening balances, opening stock | O | — | H R |
-| T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | PARTIAL (19 Nov 2026): purchases, landed costs, SOs/PIs (active/expired/renewed), receipts, PDCs (pending/cleared/bounced/replaced, issued), petty cash, bank statement lines, CRM. Tax invoices, DNs, credit notes and a VAT period wait for C4/C7 | O | Demo runs complete workflows | H |
+| T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | DONE (19 Nov 2026, TD-053): purchases, landed costs, SOs/PIs, receipts, PDCs, petty cash, bank lines, CRM, tax invoices, delivery, return + credit note, pending adjustment CN | O | Demo runs complete workflows | H |
 | T11-04 | Mobile dashboard (spec §6) | Med | Steps 5–6 | DONE (19 Nov 2026): figures by permission — open SOs, orders this month, active proformas, bank, cash & petty cash, receivables, customer advances, payables, cheques in hand; plus follow-ups due, cheques due, stock. Invoiced sales join with T5-06 (C4) | K | — | E2E |
 | T11-05 | PDF documents (PO, GRN, SO, PI, TI, DN, CN, CR, RV, PV, PDC, statements) | High | TX-01 | DONE (19 Nov 2026): PO, GRN, SO, PI, TI, DN, CN, CR/RV, PV, refund, PDC, petty cash voucher, statements. TI/DN/CN follow the C4/C7 proposals (module switch) | O/K | Snapshot company details | H |
 | T11-06 | UAT, client demo, production readiness sign-off | High | all | PLANNED | user | [production-readiness.md](docs/engineering/production-readiness.md) all green | — |
