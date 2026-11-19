@@ -142,6 +142,9 @@ export function documentHref(r: { sourceType: string; sourceId: string | null; e
       return `/purchase/invoices/${id}`;
     case "LANDED_COST":
       return `/purchase/landed-costs/${id}`;
+    case "TAX_INVOICE":
+    case "INVOICE_ALLOCATION":
+      return `/sales/invoices/${id}`;
     case "SUPPLIER_PAYMENT":
       return poOf?.get(id) ? `/purchase/orders/${poOf.get(id)}` : `/accounts/journals/${r.entryId}`;
     default:

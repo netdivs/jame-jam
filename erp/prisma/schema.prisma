@@ -308,6 +308,7 @@ model TaxCode {
   soItems         SalesOrderItem[]
   piItems         ProformaInvoiceItem[]
   pettyCash       PettyCashTransaction[]
+  tiItems         TaxInvoiceItem[]
 }
 
 // ───────────────────────────── Masters ─────────────────────────────
@@ -326,35 +327,38 @@ model Warehouse {
 }
 
 model Customer {
-  id               String            @id @default(cuid())
-  code             String            @unique
-  name             String
-  contactPerson    String?
-  mobile           String?
-  email            String?
-  address          String?
-  trn              String?
-  creditEnabled    Boolean           @default(false)
-  creditLimit      Decimal           @default(0) @db.Decimal(18, 2)
-  paymentTermsDays Int               @default(0)
-  notes            String?
-  active           Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  salesOrders      SalesOrder[]
-  proformas        ProformaInvoice[]
-  receipts         CustomerReceipt[]
-  cheques          Cheque[]
-  refunds          Refund[]
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  name               String
+  contactPerson      String?
+  mobile             String?
+  email              String?
+  address            String?
+  trn                String?
+  creditEnabled      Boolean             @default(false)
+  creditLimit        Decimal             @default(0) @db.Decimal(18, 2)
+  paymentTermsDays   Int                 @default(0)
+  notes              String?
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  salesOrders        SalesOrder[]
+  proformas          ProformaInvoice[]
+  receipts           CustomerReceipt[]
+  cheques            Cheque[]
+  refunds            Refund[]
   /// The lead this customer was converted from (CRM).
-  leadId           String?           @unique
-  lead             Lead?             @relation("LeadCustomer", fields: [leadId], references: [id])
-  contacts         CustomerContact[]
-  convertedLeads   Lead[]            @relation("LeadConvertedTo")
-  opportunities    Opportunity[]
-  interactions     CrmInteraction[]
-  followUps        CrmFollowUp[]
-  openingItems     OpeningItem[]
+  leadId             String?             @unique
+  lead               Lead?               @relation("LeadCustomer", fields: [leadId], references: [id])
+  contacts           CustomerContact[]
+  convertedLeads     Lead[]              @relation("LeadConvertedTo")
+  opportunities      Opportunity[]
+  interactions       CrmInteraction[]
+  followUps          CrmFollowUp[]
+  openingItems       OpeningItem[]
+  taxInvoices        TaxInvoice[]
+  invoiceAllocations InvoiceAllocation[]
+  deliveryNotes      DeliveryNote[]
 }
 
 enum SupplierType {
@@ -418,6 +422,8 @@ model Product {
   soItems          SalesOrderItem[]
   piItems          ProformaInvoiceItem[]
   leads            Lead[]
+  tiItems          TaxInvoiceItem[]
+  dnItems          DeliveryNoteItem[]
 }
 
 model LandedCostCategory {
@@ -553,6 +559,8 @@ model StockBalance {
   reservations StockReservation[]
   movements    StockMovement[]
   soItems      SalesOrderItem[]
+
+  dnItems DeliveryNoteItem[]
 
   @@index([productId])
   @@index([lotId])
@@ -1024,6 +1032,10 @@ model SalesOrder {
   opportunityId        String?           @unique
   opportunity          Opportunity?      @relation(fields: [opportunityId], references: [id])
 
+  taxInvoices TaxInvoice[]
+
+  deliveryNotes DeliveryNote[]
+
   @@index([customerId])
   @@index([status])
 }
@@ -1058,6 +1070,8 @@ model SalesOrderItem {
   invoicedSqm    Decimal               @default(0) @db.Decimal(18, 4)
   deliveredSqm   Decimal               @default(0) @db.Decimal(18, 4)
   piItems        ProformaInvoiceItem[]
+
+  tiItems TaxInvoiceItem[]
 
   @@unique([salesOrderId, lineNo])
   @@index([balanceId])
@@ -1109,6 +1123,9 @@ model ProformaInvoice {
   cheques         Cheque[]
   refunds         Refund[]
 
+  taxInvoices        TaxInvoice[]
+  invoiceAllocations InvoiceAllocation[]
+
   @@index([salesOrderId])
   @@index([status, expiryDate])
 }
@@ -1134,6 +1151,143 @@ model ProformaInvoiceItem {
   grossAmount       Decimal         @db.Decimal(18, 2)
 
   @@unique([proformaInvoiceId, lineNo])
+}
+
+/// Tax invoice (spec §3.3.4, T5-06). Only from a sales order (BD-01), directly or by converting a proforma.
+/// Built on the C4 proposal behind setting features.salesInvoicing (off until the client confirms, TD-045).
+/// Never edited or deleted: corrections go through credit notes (Step 7).
+model TaxInvoice {
+  id                String              @id @default(cuid())
+  number            String              @unique
+  salesOrderId      String
+  salesOrder        SalesOrder          @relation(fields: [salesOrderId], references: [id])
+  /// The proforma converted into this invoice, if any.
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice?    @relation(fields: [proformaInvoiceId], references: [id])
+  customerId        String
+  customer          Customer            @relation(fields: [customerId], references: [id])
+  customerName      String
+  customerAddress   String?
+  customerTrn       String?
+  customerMobile    String?
+  /// Supplier (our company) details as printed, for FTA (spec §3.3.4).
+  companyName       String
+  companyAddress    String?
+  companyTrn        String?
+  date              DateTime            @db.Date
+  priceMode         PriceMode
+  discount          Decimal             @default(0) @db.Decimal(18, 2)
+  netTotal          Decimal             @db.Decimal(18, 2)
+  vatTotal          Decimal             @db.Decimal(18, 2)
+  total             Decimal             @db.Decimal(18, 2)
+  /// Paid through applied advances / receipts. Paid in full unlocks the delivery note (BD-15).
+  settledAmount     Decimal             @default(0) @db.Decimal(18, 2)
+  paymentStatus     PaymentStatus       @default(UNPAID)
+  notes             String?
+  createdById       String?
+  createdAt         DateTime            @default(now())
+  items             TaxInvoiceItem[]
+  allocations       InvoiceAllocation[]
+
+  deliveryNotes DeliveryNote[]
+
+  @@index([customerId])
+  @@index([salesOrderId])
+  @@index([date])
+}
+
+model TaxInvoiceItem {
+  id               String         @id @default(cuid())
+  taxInvoiceId     String
+  taxInvoice       TaxInvoice     @relation(fields: [taxInvoiceId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  salesOrderItemId String
+  salesOrderItem   SalesOrderItem @relation(fields: [salesOrderItemId], references: [id])
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  description      String?
+  sqm              Decimal        @db.Decimal(18, 4)
+  unitPrice        Decimal        @db.Decimal(18, 4)
+  discount         Decimal        @default(0) @db.Decimal(18, 2)
+  headerDiscount   Decimal        @default(0) @db.Decimal(18, 2)
+  taxCodeId        String
+  taxCode          TaxCode        @relation(fields: [taxCodeId], references: [id])
+  taxReason        String?
+  netAmount        Decimal        @db.Decimal(18, 2)
+  vatAmount        Decimal        @db.Decimal(18, 2)
+  grossAmount      Decimal        @db.Decimal(18, 2)
+  /// SQM released by delivery notes (Step 6).
+  deliveredSqm     Decimal        @default(0) @db.Decimal(18, 4)
+
+  dnItems DeliveryNoteItem[]
+
+  @@unique([taxInvoiceId, lineNo])
+}
+
+/// Delivery note (spec §3.1.8, T6-03): goods released for a FULLY PAID tax invoice only (BD-15, no override).
+/// Issued and confirmed in one step: stock out (reservation consumed), Dr COGS / Cr Inventory at lot cost.
+/// Partial dispatch allowed; never more than invoiced. Not cancelled: goods coming back go through returns (Step 7).
+model DeliveryNote {
+  id           String             @id @default(cuid())
+  number       String             @unique
+  taxInvoiceId String
+  taxInvoice   TaxInvoice         @relation(fields: [taxInvoiceId], references: [id])
+  salesOrderId String
+  salesOrder   SalesOrder         @relation(fields: [salesOrderId], references: [id])
+  customerId   String
+  customer     Customer           @relation(fields: [customerId], references: [id])
+  customerName String
+  date         DateTime           @db.Date
+  vehicleNo    String?
+  driverName   String?
+  /// Who took the goods (customer's person, or "collected by customer").
+  receivedBy   String?
+  remarks      String?
+  /// Cost of goods released (sum of lines), posted to COGS.
+  costTotal    Decimal            @db.Decimal(18, 2)
+  createdById  String?
+  createdAt    DateTime           @default(now())
+  items        DeliveryNoteItem[]
+
+  @@index([taxInvoiceId])
+  @@index([customerId])
+}
+
+model DeliveryNoteItem {
+  id               String         @id @default(cuid())
+  deliveryNoteId   String
+  deliveryNote     DeliveryNote   @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  taxInvoiceItemId String
+  taxInvoiceItem   TaxInvoiceItem @relation(fields: [taxInvoiceItemId], references: [id])
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  /// The stock bucket released (slab, or lot/block bucket for tiles), from the SO line.
+  balanceId        String
+  balance          StockBalance   @relation(fields: [balanceId], references: [id])
+  sqm              Decimal        @db.Decimal(18, 4)
+  cost             Decimal        @db.Decimal(18, 2)
+
+  @@unique([deliveryNoteId, lineNo])
+}
+
+/// Customer advance applied to a tax invoice: Dr Customer Advances / Cr AR (T5-07).
+model InvoiceAllocation {
+  id                String           @id @default(cuid())
+  taxInvoiceId      String
+  taxInvoice        TaxInvoice       @relation(fields: [taxInvoiceId], references: [id])
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  /// Set when the advance was held on a proforma (its received amount goes down).
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice? @relation(fields: [proformaInvoiceId], references: [id])
+  date              DateTime         @db.Date
+  amount            Decimal          @db.Decimal(18, 2)
+  createdById       String?
+  createdAt         DateTime         @default(now())
+
+  @@index([taxInvoiceId])
+  @@index([customerId])
 }
 
 // ───────────────────────────── Customer receipts (Step 6) ─────────────────────────────

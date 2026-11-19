@@ -36,6 +36,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ? [
               { href: "/sales/orders", label: "Sales orders", icon: "salesOrders" as const },
               { href: "/sales/proformas", label: "Proforma invoices", icon: "proformas" as const },
+              { href: "/sales/invoices", label: "Tax invoices", icon: "proformas" as const },
+              ...(has("delivery.view") ? [{ href: "/sales/deliveries", label: "Delivery notes", icon: "proformas" as const }] : []),
             ]
           : []),
         ...(has("receipts.view") ? [{ href: "/receipts", label: "Customer receipts", icon: "receipts" as const }] : []),

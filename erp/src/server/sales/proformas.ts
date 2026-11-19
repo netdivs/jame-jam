@@ -7,9 +7,10 @@
 //  - A PI posts no accounting or VAT entries.
 import type { PiStatus, Prisma } from "@prisma/client";
 import { z } from "zod";
-import { AppError, Ctx, D, Tx, ZERO, assertCan, audit, inTx, nextDocNumber, round2, round4, sum, systemCtx, toDateOnly, today } from "../core";
+import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, inTx, nextDocNumber, round2, round4, sum, systemCtx, toDateOnly, today } from "../core";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
-import { SO_LIVE, customerSnapshot, lockSo, soStatusLabel } from "./orders";
+import { SO_LIVE, customerSnapshot, lockSo, soStatusLabel, type SoWithItems } from "./orders";
+import { getSetting } from "../settings";
 import { computeDocument, salesRate } from "./vat";
 
 /** PIs that still quote their SO (count against its open quantity). */
@@ -54,7 +55,7 @@ export const piSchema = z.object({
 export type PiInput = z.input<typeof piSchema>;
 
 /** SQM of an SO line not yet invoiced and not quoted by another open PI. */
-async function openSqmByLine(tx: Tx, soId: string) {
+export async function openSqmByLine(tx: Tx, soId: string) {
   const so = await tx.salesOrder.findUniqueOrThrow({ where: { id: soId }, include: { items: true } });
   const quoted = await tx.proformaInvoiceItem.groupBy({
     by: ["salesOrderItemId"],
@@ -63,6 +64,53 @@ async function openSqmByLine(tx: Tx, soId: string) {
   });
   const q = new Map(quoted.map((r) => [r.salesOrderItemId, D(r._sum.sqm ?? 0)]));
   return new Map(so.items.map((i) => [i.id, D(i.sqm).minus(i.invoicedSqm).minus(q.get(i.id) ?? ZERO)]));
+}
+
+/**
+ * Pick SO lines for a proforma or tax invoice and price them (shared by both, T5-06). `wanted` omitted = every
+ * line for its open SQM. A partial quantity takes the same share of the line discount; the SO's invoice-level
+ * discount follows in proportion to the amount after line discounts. Uses the vat.rounding setting.
+ */
+export async function quoteSoLines(
+  tx: Tx,
+  so: SoWithItems,
+  open: Map<string, Dec>,
+  wanted0: { salesOrderItemId: string; sqm: Dec }[] | undefined,
+  verb: "quote" | "invoice",
+) {
+  const wanted = wanted0
+    ? wanted0.map((l) => ({ salesOrderItemId: l.salesOrderItemId, sqm: round4(l.sqm) }))
+    : so.items.map((i) => ({ salesOrderItemId: i.id, sqm: open.get(i.id) ?? ZERO }));
+  const picked = wanted.filter((w) => w.sqm.gt(0));
+  if (picked.length === 0) throw new AppError("VALIDATION", `Nothing left to ${verb} on SO ${so.number}: every line is invoiced or on an open proforma`);
+
+  const seen = new Set<string>();
+  const lines = picked.map((w) => {
+    const it = so.items.find((i) => i.id === w.salesOrderItemId);
+    if (!it) throw new AppError("VALIDATION", "A line does not belong to this sales order");
+    if (seen.has(it.id)) throw new AppError("VALIDATION", `SO line ${it.lineNo} appears twice`);
+    seen.add(it.id);
+    const avail = open.get(it.id) ?? ZERO;
+    if (w.sqm.gt(avail)) {
+      throw new AppError("VALIDATION", `SO line ${it.lineNo}: only ${avail.toFixed(4).replace(/\.?0+$/, "")} SQM is left to ${verb} (not invoiced and not on another open proforma)`);
+    }
+    const discount = w.sqm.eq(it.sqm) ? D(it.discount) : round2(D(it.discount).times(w.sqm).div(it.sqm));
+    return { it, sqm: w.sqm, discount };
+  });
+
+  const taxes = await tx.taxCode.findMany({ where: { id: { in: lines.map((l) => l.it.taxCodeId) } } });
+  const tById = new Map(taxes.map((t) => [t.id, t]));
+  const soAfter = sum(so.items.map((i) => round2(D(i.sqm).times(i.unitPrice)).minus(i.discount)));
+  const docAfter = sum(lines.map((l) => round2(l.sqm.times(l.it.unitPrice)).minus(l.discount)));
+  const headerDiscount = D(so.discount).isZero() || soAfter.isZero() ? ZERO : docAfter.eq(soAfter) ? D(so.discount) : round2(D(so.discount).times(docAfter).div(soAfter));
+
+  const doc = computeDocument(
+    so.priceMode,
+    lines.map((l) => ({ sqm: l.sqm, unitPrice: D(l.it.unitPrice), discount: l.discount, rate: salesRate(tById.get(l.it.taxCodeId)!) })),
+    headerDiscount,
+    await getSetting("vat.rounding", tx),
+  );
+  return { lines, doc };
 }
 
 export async function createProformaInvoice(ctx: Ctx, raw: unknown) {
@@ -78,39 +126,7 @@ export async function createProformaInvoice(ctx: Ctx, raw: unknown) {
     if (date < so.date) throw new AppError("VALIDATION", "The proforma date cannot be before the sales order date");
     const open = await openSqmByLine(tx, so.id);
 
-    const wanted = input.lines
-      ? input.lines.map((l) => ({ salesOrderItemId: l.salesOrderItemId, sqm: round4(l.sqm) }))
-      : so.items.map((i) => ({ salesOrderItemId: i.id, sqm: open.get(i.id) ?? ZERO }));
-    const picked = wanted.filter((w) => w.sqm.gt(0));
-    if (picked.length === 0) throw new AppError("VALIDATION", `Nothing left to quote on SO ${so.number}: every line is invoiced or on another open proforma`);
-
-    const seen = new Set<string>();
-    const lines = picked.map((w) => {
-      const it = so.items.find((i) => i.id === w.salesOrderItemId);
-      if (!it) throw new AppError("VALIDATION", "A line does not belong to this sales order");
-      if (seen.has(it.id)) throw new AppError("VALIDATION", `SO line ${it.lineNo} appears twice`);
-      seen.add(it.id);
-      const avail = open.get(it.id) ?? ZERO;
-      if (w.sqm.gt(avail)) {
-        throw new AppError("VALIDATION", `SO line ${it.lineNo}: only ${avail.toFixed(4).replace(/\.?0+$/, "")} SQM is left to quote (not invoiced and not on another open proforma)`);
-      }
-      // A partial quantity takes the same share of the line discount.
-      const discount = w.sqm.eq(it.sqm) ? D(it.discount) : round2(D(it.discount).times(w.sqm).div(it.sqm));
-      return { it, sqm: w.sqm, discount };
-    });
-
-    const taxes = await tx.taxCode.findMany({ where: { id: { in: lines.map((l) => l.it.taxCodeId) } } });
-    const tById = new Map(taxes.map((t) => [t.id, t]));
-    // The SO's invoice-level discount follows in proportion to the quoted amount after line discounts.
-    const soAfter = sum(so.items.map((i) => round2(D(i.sqm).times(i.unitPrice)).minus(i.discount)));
-    const piAfter = sum(lines.map((l) => round2(l.sqm.times(l.it.unitPrice)).minus(l.discount)));
-    const headerDiscount = D(so.discount).isZero() || soAfter.isZero() ? ZERO : piAfter.eq(soAfter) ? D(so.discount) : round2(D(so.discount).times(piAfter).div(soAfter));
-
-    const doc = computeDocument(
-      so.priceMode,
-      lines.map((l) => ({ sqm: l.sqm, unitPrice: D(l.it.unitPrice), discount: l.discount, rate: salesRate(tById.get(l.it.taxCodeId)!) })),
-      headerDiscount,
-    );
+    const { lines, doc } = await quoteSoLines(tx, so, open, input.lines, "quote");
     const customer = await tx.customer.findUniqueOrThrow({ where: { id: so.customerId } });
     const settings = await tx.companySetting.findUniqueOrThrow({ where: { id: 1 } });
     const validityDays = settings.piValidityDays;

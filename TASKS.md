@@ -39,8 +39,8 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T5-03 | SO reservation expiry job + extension (`so.extendReservation`) | High | T5-02, **C2** | BLOCKED (C2) | O | Auto-release after validity; extension audited | H R P A |
 | T5-04 | VAT engine: inclusive/exclusive line maths per spec §3.3.4, discounts, no round-off | High | **C4** | BUILT as C4 proposal; sign-off BLOCKED (C4) | C | 81.72 × 100.00 incl → 8,172.00 / 389.14 / 7,782.86; Σnet + ΣVAT = total | H R (property tests) |
 | T5-05 | PI service: create from SO only; validity from `piValidityDays`; expire job; renew (`pi.renew`); close/cancel; no GL | High | T5-02 | DONE (job wiring waits for TJ-01) | O | R1 | H R P A |
-| T5-06 | TI service: from SO (or PI); FTA fields; post Dr AR / Cr SALES, Cr VAT_OUTPUT; reservation moves with invoiced qty; partial invoicing | High | T5-02, T5-04 | BLOCKED (C4) | O | D1, D4; backend rejects TI without SO | H R P G A |
-| T5-07 | Customer advance auto knock-off on TI (from PI-referenced receipts) | Med | T6-01 | PLANNED | O | Advance applied; payment status updated | H G |
+| T5-06 | TI service: from SO (or PI); FTA fields; post Dr AR / Cr SALES, Cr VAT_OUTPUT; reservation moves with invoiced qty; partial invoicing | High | T5-02, T5-04 | BUILT behind `features.salesInvoicing` (19 Nov 2026, TD-045); sign-off BLOCKED (C4) | O | D1, D4; backend rejects TI without SO | H R P G A |
+| T5-07 | Customer advance auto knock-off on TI (from PI-referenced receipts) | Med | T6-01 | BUILT with T5-06 (TD-045) | O | Advance applied; payment status updated | H G |
 | T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | PARTIAL: SO + PI screens done; TI screens with T5-06 | K | Mobile usable; mirrors backend errors | HTTP/E2E |
 | T5-09 | `taxCode.change` permission + reason for non-SR codes on sales (and purchase) lines (F12) | Med | T5-01 | DONE (sales TD-019, purchase TD-022) | O | Spec §3.3.5; audited | R P A |
 | T5-10 | Sales permissions in `rbac.ts` (spec §5 matrix) | High | — | DONE | C | Matrix tests per role | P |
@@ -51,9 +51,9 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 |---|---|---|---|---|---|---|---|
 | T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | PARTIAL: receipts and advances (with PI link) done; allocation to TIs waits for T5-06 (C4) | O | Payment status = total − allocations | H R P G A |
 | T6-02 | PDC received/issued with status history and GL (PDC_RECEIVABLE/PAYABLE) | High | T6-01, T8-03 | DONE (received; issued against a PO, a landed cost bill or an opening supplier invoice) | O | R5; PDC counts as payment only when cleared | H R P G A |
-| T6-03 | DN: only when TI fully paid (BD-15); consume reservation, Dr COGS / Cr INVENTORY; partial dispatch | High | T6-01 | PLANNED | O | R10 | H R P G S A |
+| T6-03 | DN: only when TI fully paid (BD-15); consume reservation, Dr COGS / Cr INVENTORY; partial dispatch | High | T6-01 | BUILT behind `features.salesInvoicing` (19 Nov 2026, TD-048) | O | R10 | H R P G S A |
 | T6-04 | PDC due reminders job + dashboard widget | Med | T6-02, TJ-01 | DONE (dashboard widget + daily pdc-due job; no email/SMS by scope) | O/K | Reminder N days ahead (`pdcReminderDays`) | H |
-| T6-05 | Receipts/PDC/DN UI incl. mobile DN confirmation | High | T6-01…03 | PLANNED | K | — | E2E |
+| T6-05 | Receipts/PDC/DN UI incl. mobile DN confirmation | High | T6-01…03 | DONE for DN (19 Nov 2026): DN on the TI page, list, detail, PDF; mobile layout checked by E2E | K | — | E2E |
 
 ## Step 7 — Returns & Credit Notes
 
@@ -112,7 +112,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | TS-05 | Dependency upgrades for `npm audit --omit=dev` highs: zod 3 → 4 (breaking API), Next.js patch that bundles postcss ≥ 8.5.23, Prisma release without vulnerable deepmerge-ts; then make the CI audit step blocking | High | — | DONE (19 Nov 2026, TD-038): zod 4.6.7; postcss and deepmerge-ts via npm overrides (no upstream fix in Next 15 / Prisma 6 yet); CI audit blocking | C | `npm audit --omit=dev --audit-level=high` clean; all gates green | H E2E |
 | TP-01 | Business policy settings registry + Settings → System page (Phase 0) | High | — | DONE (19 Nov 2026, TD-039) | C | Defaults keep current behaviour; audited; Owner only | H R P A |
 | TP-02 | Policy settings Phase 1: credit purchases, invoice-above-PO tolerance, category allocation basis, bank charges as expense, cash refund limit | High | TP-01 | DONE (19 Nov 2026, TD-040…044) | C | Each rule off by default; tests per rule | H R P G A |
-| TP-03 | Phase 2: Tax Invoice, DN, Returns, CN, reservation expiry, VAT reports behind feature switch `features.salesInvoicing` (off in production), pending rules C2/C4/C7 as settings defaulting to the proposals | High | TP-01 | PLANNED | C | Switch off = no change; docs say "proposal, client approval pending" | per task |
+| TP-03 | Phase 2: Tax Invoice, DN, Returns, CN, reservation expiry, VAT reports behind feature switch `features.salesInvoicing` (off in production), pending rules C2/C4/C7 as settings defaulting to the proposals | High | TP-01 | IN PROGRESS: TI + knock-off + VAT settings + DN done (19 Nov 2026); next returns (T7-01), then CN (T7-02), reservation expiry (T5-03), VAT reports (T9-01/02) | C | Switch off = no change; docs say "proposal, client approval pending" | per task |
 | TJ-01 | Scheduled job runner (PI expiry, SO expiry, PDC/CRM reminders) | High | — | DONE (jobs service in docker-compose.prod.yml is applied at the release) | C | Idempotent; runs as `systemCtx`; logged | H |
 | TX-01 | Choose PDF library (ADR) | Med | — | DONE (19 Nov 2026, TD-035: @react-pdf/renderer) | C | Entry in DECISIONS.md | — |
 | TX-02 | Choose Excel library (ADR) | Med | — | DONE (19 Nov 2026, TD-036: exceljs) | C | Entry in DECISIONS.md | — |

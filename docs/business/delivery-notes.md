@@ -1,5 +1,7 @@
 # Delivery notes
 
+**Implementation status (19 Nov 2026):** Built behind the module switch `features.salesInvoicing` (TD-045, TD-048): `erp/src/server/sales/delivery.ts`, `/sales/deliveries`, DN card on the tax invoice page, PDF. Tests: `erp/tests/delivery.test.ts`, `erp/e2e/invoice-flow.spec.ts`. Sections below marked "Planned" describe the spec; the built rules are in TD-048.
+
 Purpose: the only way goods leave the warehouse — a DN created from a fully paid Tax Invoice, confirmed by the storekeeper, which deducts stock, consumes the reservation and posts COGS.
 
 **Implementation status:** Planned (Step 6). Stock-side helper (`consumeReservation`) Done (Step 3).

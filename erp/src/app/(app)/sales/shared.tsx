@@ -24,6 +24,9 @@ export const PiStatus = ({ pi }: { pi: { status: PiStatusT; expiryDate: Date; re
   return <Badge tone={PI_TONE[s]}>{titleCase(s)}</Badge>;
 };
 
+const PAY_TONE: Record<string, Tone> = { UNPAID: "danger", PARTIAL: "warning", PAID: "success" };
+export const TiPayStatus = ({ s }: { s: string }) => <Badge tone={PAY_TONE[s]}>{s === "PARTIAL" ? "Partly paid" : titleCase(s)}</Badge>;
+
 export const priceModeLabel = (m: string) => (m === "INCLUSIVE" ? "VAT-inclusive" : "VAT-exclusive");
 
 /** Options for the SO editor. */

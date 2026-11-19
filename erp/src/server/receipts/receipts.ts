@@ -12,10 +12,13 @@ import { cashAccountFor } from "../accounting/banks";
 import { assertPiUsable } from "../sales/proformas";
 import { customerAdvancePosition, lockCustomer } from "../refunds/refunds";
 import { dateStr, decimal, optText, parse } from "../validation";
+import { prepareReceiptForInvoice } from "../sales/invoices";
 
 export const receiptSchema = z.object({
   customerId: optText(40),
   proformaInvoiceId: optText(40),
+  /** Pay a tax invoice: the receipt is applied to it at once (T5-07). */
+  taxInvoiceId: optText(40),
   date: dateStr,
   amount: decimal({ gt: 0, dp: 2, label: "Amount" }),
   mode: z.enum(["CASH", "BANK"], { error: "Choose cash or bank" }),
@@ -54,6 +57,12 @@ export async function recordCustomerReceipt(ctx: Ctx, raw: unknown) {
       await tx.proformaInvoice.update({ where: { id: pi.id }, data: { receivedAmount: D(pi.receivedAmount).plus(amount) } });
       piNumber = pi.number;
     }
+    let forInvoice: Awaited<ReturnType<typeof prepareReceiptForInvoice>> | null = null;
+    if (input.taxInvoiceId) {
+      if (input.proformaInvoiceId) throw new AppError("VALIDATION", "A receipt is for a proforma or a tax invoice, not both");
+      forInvoice = await prepareReceiptForInvoice(tx, input.taxInvoiceId, customerId, amount, date);
+      customerId = forInvoice.customerId;
+    }
     if (!customerId) throw new AppError("VALIDATION", "Select the customer", { fields: { customerId: "Customer is required" } });
     const customer = await tx.customer.findUnique({ where: { id: customerId } });
     if (!customer || !customer.active) throw new AppError("VALIDATION", "Select an active customer");
@@ -78,14 +87,19 @@ export async function recordCustomerReceipt(ctx: Ctx, raw: unknown) {
       date,
       sourceType: "CUSTOMER_RECEIPT",
       sourceId: receipt.id,
-      memo: `${number} — ${customer.name}${piNumber ? ` — advance for ${piNumber}` : " — advance"}`,
+      memo: `${number} — ${customer.name}${piNumber ? ` — advance for ${piNumber}` : forInvoice ? ` — for ${forInvoice.number}` : " — advance"}`,
       lines: [
         { account: cash.account, debit: amount },
         { account: "CUSTOMER_ADVANCES", credit: amount, partyType: "CUSTOMER", partyId: customer.id },
       ],
     });
-    await audit(tx, ctx, { action: "create", entity: "CustomerReceipt", entityId: receipt.id, after: { number, customer: customer.name, amount, mode: input.mode, proforma: piNumber } });
-    return receipt;
+    let result = receipt;
+    if (forInvoice) {
+      await forInvoice.apply(ctx);
+      result = await tx.customerReceipt.update({ where: { id: receipt.id }, data: { allocatedAmount: amount } });
+    }
+    await audit(tx, ctx, { action: "create", entity: "CustomerReceipt", entityId: receipt.id, after: { number, customer: customer.name, amount, mode: input.mode, proforma: piNumber, taxInvoice: forInvoice?.number } });
+    return result;
   });
 }
 

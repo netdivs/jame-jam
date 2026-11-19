@@ -7,6 +7,8 @@ import { AppError } from "@/server/core";
 import { cancelSalesOrder, saveSalesOrder } from "@/server/sales/orders";
 import { closeProformaInvoice, createProformaInvoice, renewProformaInvoice } from "@/server/sales/proformas";
 import { stockOptions, type StockOption } from "@/server/sales/queries";
+import { applyAdvanceToInvoice, createTaxInvoice } from "@/server/sales/invoices";
+import { createDeliveryNote } from "@/server/sales/delivery";
 
 function json(fd: FormData): unknown {
   try {
@@ -17,6 +19,7 @@ function json(fd: FormData): unknown {
 }
 const soPath = (id: string) => `/sales/orders/${id}`;
 const piPath = (id: string) => `/sales/proformas/${id}`;
+const tiPath = (id: string) => `/sales/invoices/${id}`;
 
 /** Stock picker data for the SO form (product → available slabs / buckets). */
 export async function stockOptionsAction(productId: string, soId: string | null): Promise<{ ok: boolean; options: StockOption[]; message?: string }> {
@@ -99,4 +102,50 @@ export async function closePiAction(id: string, kind: "CLOSED" | "CANCELLED", _:
     revalidatePath("/sales", "layout");
   }
   return r;
+}
+
+/** Issue a tax invoice from the SO page (fields `sqm:<soLineId>`) or convert a proforma (piId set). */
+export async function createTiAction(src: { soId?: string; piId?: string }, _: ActionState, fd: FormData): Promise<ActionState> {
+  let tiId = "";
+  const r = await runAction(async (u) => {
+    const lines = [...fd.entries()]
+      .filter(([k, v]) => k.startsWith("sqm:") && typeof v === "string")
+      .map(([k, v]) => ({ salesOrderItemId: k.slice(4), sqm: String(v).trim() || "0" }));
+    const ti = await createTaxInvoice(u.ctx, {
+      salesOrderId: src.soId,
+      proformaInvoiceId: src.piId,
+      date: String(fd.get("date") ?? ""),
+      notes: String(fd.get("notes") ?? ""),
+      lines: src.soId && lines.length ? lines : undefined,
+    });
+    tiId = ti.id;
+  });
+  if (!r.ok) return r;
+  revalidatePath("/sales", "layout");
+  redirect(tiPath(tiId));
+}
+
+export async function applyAdvanceAction(tiId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    const a = await applyAdvanceToInvoice(u.ctx, tiId, { date: String(fd.get("date") ?? ""), amount: String(fd.get("amount") ?? "") });
+    return `AED ${a.amount.toFixed(2)} of advance applied`;
+  });
+  if (r.ok) revalidatePath(tiPath(tiId));
+  return r;
+}
+
+/** Issue a delivery note from the TI page; per-line SQM fields are named `dn:<tiLineId>`. */
+export async function createDnAction(tiId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  let dnId = "";
+  const r = await runAction(async (u) => {
+    const lines = [...fd.entries()]
+      .filter(([k, v]) => k.startsWith("dn:") && typeof v === "string")
+      .map(([k, v]) => ({ taxInvoiceItemId: k.slice(3), sqm: String(v).trim() || "0" }));
+    const s = (k: string) => String(fd.get(k) ?? "");
+    dnId = (await createDeliveryNote(u.ctx, { taxInvoiceId: tiId, date: s("date"), vehicleNo: s("vehicleNo"), driverName: s("driverName"), receivedBy: s("receivedBy"), remarks: s("remarks"), lines: lines.length ? lines : undefined })).id;
+  });
+  if (!r.ok) return r;
+  revalidatePath("/sales", "layout");
+  revalidatePath("/inventory", "layout");
+  redirect(`/sales/deliveries/${dnId}`);
 }

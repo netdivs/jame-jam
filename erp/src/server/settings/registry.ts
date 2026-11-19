@@ -6,9 +6,11 @@
 // Adding a setting = one entry below + reading it with getSetting() where the rule is enforced. The settings page
 // renders it from this registry.
 
-export type SettingGroup = "purchase" | "landedCost" | "refunds";
+export type SettingGroup = "features" | "vat" | "purchase" | "landedCost" | "refunds";
 
 export const SETTING_GROUPS: { key: SettingGroup; title: string; description: string }[] = [
+  { key: "features", title: "Modules", description: "Switch whole modules on or off. Modules built on proposals that the client has not confirmed yet stay off until confirmed." },
+  { key: "vat", title: "VAT", description: "How VAT is worked out and shown on sales documents." },
   { key: "purchase", title: "Purchasing", description: "When goods may be received and how supplier invoices and payments are checked." },
   { key: "landedCost", title: "Landed cost", description: "How import costs are treated." },
   { key: "refunds", title: "Refunds", description: "Controls on paying money back." },
@@ -23,6 +25,35 @@ export type EnumDef<V extends string = string> = Base & { kind: "enum"; default:
 export type SettingDef = BoolDef | IntDef | DecimalDef | EnumDef;
 
 export const SETTINGS = {
+  "features.salesInvoicing": {
+    group: "features",
+    kind: "bool",
+    label: "Tax invoices, delivery notes, returns and credit notes",
+    help: "Built on the proposals for client decisions C2, C4 and C7 (TD-045). Switch on only after the client has confirmed the VAT method and the other rules below.",
+    default: false,
+  },
+  "vat.rounding": {
+    group: "vat",
+    kind: "enum",
+    label: "VAT rounding",
+    help: "Per line (C4 proposal): VAT is worked out and rounded on each line; the document VAT is the sum of the lines. Per document: VAT is worked out once on the total of each rate and spread over the lines, so the total VAT is exactly total × rate. Applies to sales orders, proformas and tax invoices saved after the change.",
+    default: "PER_LINE",
+    options: [
+      { value: "PER_LINE", label: "Per line, then added up" },
+      { value: "PER_DOCUMENT", label: "Once on the document total" },
+    ],
+  },
+  "vat.invoicePriceDisplay": {
+    group: "vat",
+    kind: "enum",
+    label: "Prices on the printed tax invoice",
+    help: "The FTA requires the unit price excluding VAT on each line. With the reference column the customer also sees the VAT-inclusive price per SQM they agreed (C4 proposal).",
+    default: "EXCLUSIVE_WITH_INCLUSIVE_REF",
+    options: [
+      { value: "EXCLUSIVE_WITH_INCLUSIVE_REF", label: "Price excl. VAT + inclusive price as reference" },
+      { value: "EXCLUSIVE_ONLY", label: "Price excl. VAT only" },
+    ],
+  },
   "purchase.receiveBeforePayment": {
     group: "purchase",
     kind: "enum",

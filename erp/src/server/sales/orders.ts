@@ -11,7 +11,8 @@ import { markOpportunityWon, winOpportunity } from "../crm/crm";
 import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, can, inTx, nextDocNumber, round4, toDateOnly } from "../core";
 import { lockBalance, releaseReservation, reserveStock } from "../inventory/stock";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
-import { computeDocument, salesRate } from "./vat";
+import { computeDocument, salesRate, type VatRounding } from "./vat";
+import { getSetting } from "../settings";
 
 /** An SO can be edited only while nothing has been invoiced or delivered. */
 export const SO_EDITABLE: SoStatus[] = ["OPEN"];
@@ -111,11 +112,12 @@ async function resolveLines(tx: Tx, ctx: Ctx, lines: Line[], previous: Map<strin
   });
 }
 
-function priceLines(mode: PriceMode, resolved: Awaited<ReturnType<typeof resolveLines>>, discount: Dec) {
+function priceLines(mode: PriceMode, resolved: Awaited<ReturnType<typeof resolveLines>>, discount: Dec, rounding: VatRounding) {
   const doc = computeDocument(
     mode,
     resolved.map((r) => ({ sqm: r.sqm, unitPrice: r.unitPrice, discount: r.input.discount ?? ZERO, rate: r.rate })),
     discount,
+    rounding,
   );
   const items = resolved.map((r, i) => ({
     lineNo: i + 1,
@@ -173,7 +175,7 @@ export async function saveSalesOrder(ctx: Ctx, id: string | null, raw: unknown) 
     }
     const prevTax = new Map((before?.items ?? []).map((it) => [it.id, { taxCodeId: it.taxCodeId, taxReason: it.taxReason }]));
     const resolved = await resolveLines(tx, ctx, input.lines, prevTax);
-    const { doc, items } = priceLines(mode, resolved, input.discount ?? ZERO);
+    const { doc, items } = priceLines(mode, resolved, input.discount ?? ZERO, await getSetting("vat.rounding", tx));
 
     await lockBuckets(tx, [...items.map((i) => i.balanceId), ...(before?.items ?? []).map((i) => i.balanceId)]);
 

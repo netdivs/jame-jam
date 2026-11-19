@@ -4,6 +4,12 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 
 ## [Unreleased]
 
+### Added — tax invoices behind a module switch (not deployed; switched off)
+- Tax invoices from a sales order or by converting a proforma; FTA print (PDF); money received on the proformas is applied automatically; free advances can be applied; receipts can be recorded against an invoice (TD-045).
+- Delivery notes: only for a fully paid tax invoice; partial dispatch; stock out with COGS; PDF gate pass (TD-048).
+- Settings → System → Modules: tax invoicing stays off until the client confirms the VAT method (C4).
+- VAT rounding per line or per document, and the price display on printed tax invoices, are settings (TD-046, TD-047).
+
 ### Added — business policy settings (Phase 0–1, not deployed)
 - Settings → System: every business rule in one place, grouped, with help text; changes are audited. The core rules moved here from Company settings. New settings are added through a registry (TD-039); each one is off / unchanged by default.
 - Credit purchases: suppliers can be marked "gives credit" with credit days; a setting lets their goods be collected and received before payment (TD-040). Supplier invoice due dates default from credit days.

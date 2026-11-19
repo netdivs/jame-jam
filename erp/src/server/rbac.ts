@@ -43,6 +43,8 @@ export const PERMISSIONS = {
   "sales.renewPi": "Renew an expired proforma invoice",
   "sales.extendReservation": "Extend a sales order's stock reservation",
   "taxCode.change": "Use a tax code other than standard-rated (SR) on a document line",
+  "delivery.view": "View delivery notes",
+  "delivery.create": "Issue delivery notes (release goods for a fully paid tax invoice)",
   // Receipts & accounts
   "receipts.view": "View customer receipts and advances",
   "receipts.create": "Record customer receipts (CR / RV)",
@@ -108,6 +110,7 @@ export const ROLES: { key: string; name: string; description: string; permission
       "payments.supplier",
       "landedCost.edit",
       "sales.view",
+      "delivery.view",
       "taxCode.change",
       "receipts.view",
       "receipts.create",
@@ -131,7 +134,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     name: "Sales Staff",
     description: "Customers, sales orders and invoices",
     // Spec §5: SO / PI / TI create/edit; no cancel, renew, extend or tax code change.
-    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "receipts.view", "receipts.create", "crm.view", "crm.edit"],
+    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "delivery.view", "receipts.view", "receipts.create", "crm.view", "crm.edit"],
   },
   {
     key: "storekeeper",
@@ -146,6 +149,8 @@ export const ROLES: { key: string; name: string; description: string; permission
       "purchase.view",
       "purchase.receive",
       "sales.view",
+      "delivery.view",
+      "delivery.create",
     ],
   },
 ];
