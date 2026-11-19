@@ -460,7 +460,18 @@ export async function customerTimeline(ctx: Ctx, customerId: string): Promise<Ti
     can(ctx, "receipts.view") ? prisma.cheque.findMany({ where: { customerId, direction: "RECEIVED" } }) : Promise.resolve([]),
     prisma.crmFollowUp.findMany({ where: { OR: [{ customerId }, { opportunity: { customerId } }], status: { not: "OPEN" }, ...(own ? { assignedToId: me(ctx) } : {}) }, include: { assignedTo: { select: { name: true } } } }),
   ]);
+  const sv = can(ctx, "sales.view");
+  const [tis, dns, rrs, cns] = await Promise.all([
+    sv ? prisma.taxInvoice.findMany({ where: { customerId } }) : Promise.resolve([]),
+    sv && can(ctx, "delivery.view") ? prisma.deliveryNote.findMany({ where: { customerId } }) : Promise.resolve([]),
+    sv ? prisma.returnRequest.findMany({ where: { customerId } }) : Promise.resolve([]),
+    sv ? prisma.creditNote.findMany({ where: { customerId, status: { not: "REJECTED" } } }) : Promise.resolve([]),
+  ]);
   const ev: TimelineEvent[] = [];
+  for (const t of tis) ev.push({ at: t.createdAt, kind: "sales", title: `Tax invoice ${t.number}`, detail: t.paymentStatus === "PARTIAL" ? "partly paid" : t.paymentStatus.toLowerCase(), amount: D(t.total), href: `/sales/invoices/${t.id}` });
+  for (const d of dns) ev.push({ at: d.createdAt, kind: "sales", title: `Delivery note ${d.number}`, detail: d.receivedBy ? `received by ${d.receivedBy}` : undefined, href: `/sales/deliveries/${d.id}` });
+  for (const r of rrs) ev.push({ at: r.createdAt, kind: "sales", title: `Return ${r.number}`, detail: `${r.status.toLowerCase()} — ${r.reason}`, href: `/sales/returns/${r.id}` });
+  for (const c of cns) ev.push({ at: c.createdAt, kind: "money", title: c.number ? `Credit note ${c.number}` : "Credit note (awaiting approval)", detail: c.reason, amount: D(c.total).negated(), href: `/sales/credit-notes/${c.id}` });
   const label: Record<string, string> = { CALL: "Call", MEETING: "Meeting", SITE_VISIT: "Site visit", EMAIL: "Email", NOTE: "Note" };
   for (const i of interactions) ev.push({ at: i.at, kind: "interaction", title: label[i.type], detail: `${i.notes}${i.outcome ? ` — ${i.outcome}` : ""}`, user: i.user.name });
   for (const l of leads) {

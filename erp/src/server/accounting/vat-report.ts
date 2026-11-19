@@ -4,12 +4,16 @@
 //           reverse charge on landed cost bills from abroad (box 3) and on imported goods (supplier invoices, box 6).
 //   Input:  standard-rated purchases — supplier invoices, landed cost bills, petty cash (box 9) — and the
 //           recoverable reverse charge of boxes 3 + 6 (box 10).
-// The emirate split of box 1 is not tracked: everything is reported in the company's emirate.
+// Box 1 is split by emirate (1a–1g): each tax invoice's place of supply snapshot (customer emirate, else the company's,
+// setting vat.companyEmirate); a credit note follows its invoice.
 // Reconciliation: the report's output/input VAT against the movement of the VAT Output / VAT Input accounts in the
 // same dates; entries from other sources (manual journals, opening balances, reversals) are listed as the difference.
 import { Ctx, D, Dec, ZERO, assertCan, prisma, sum } from "../core";
+import { SETTINGS, getSetting } from "../settings";
 
-export type VatRow = { date: Date; number: string; href: string; party: string; trn: string | null; code: string; net: Dec; vat: Dec; kind: string };
+export const EMIRATES = SETTINGS["vat.companyEmirate"].options;
+
+export type VatRow = { date: Date; number: string; href: string; party: string; trn: string | null; code: string; net: Dec; vat: Dec; kind: string; emirate?: string };
 type Box = { net: Dec; vat: Dec; adjustment?: Dec };
 
 const KNOWN_SOURCES = ["TAX_INVOICE", "CREDIT_NOTE", "SUPPLIER_INVOICE", "LANDED_COST", "PETTY_CASH"];
@@ -19,12 +23,13 @@ export async function vatReturn(ctx: Ctx, from: Date, to: Date) {
   const range = { gte: from, lte: to };
   const [tis, cns, pis, lces, petty] = await Promise.all([
     prisma.taxInvoice.findMany({ where: { date: range }, include: { items: { include: { taxCode: true } } }, orderBy: [{ date: "asc" }, { number: "asc" }] }),
-    prisma.creditNote.findMany({ where: { date: range, status: "POSTED" }, include: { items: { include: { taxInvoiceItem: { include: { taxCode: true } } } } }, orderBy: [{ date: "asc" }, { number: "asc" }] }),
+    prisma.creditNote.findMany({ where: { date: range, status: "POSTED" }, include: { taxInvoice: { select: { supplyEmirate: true } }, items: { include: { taxInvoiceItem: { include: { taxCode: true } } } } }, orderBy: [{ date: "asc" }, { number: "asc" }] }),
     prisma.supplierInvoice.findMany({ where: { date: range }, include: { supplier: true, items: { include: { taxCode: true } } }, orderBy: [{ date: "asc" }, { number: "asc" }] }),
     prisma.landedCostExpense.findMany({ where: { date: range }, include: { supplier: true, taxCode: true }, orderBy: [{ date: "asc" }, { number: "asc" }] }),
     prisma.pettyCashTransaction.findMany({ where: { date: range, type: "EXPENSE", status: "POSTED", vatAmount: { gt: 0 } }, include: { taxCode: true }, orderBy: [{ date: "asc" }, { number: "asc" }] }),
   ]);
 
+  const companyEmirate = await getSetting("vat.companyEmirate");
   const output: VatRow[] = [];
   const input: VatRow[] = [];
   /** One row per document and tax code. */
@@ -39,10 +44,10 @@ export async function vatReturn(ctx: Ctx, from: Date, to: Date) {
 
   for (const t of tis)
     for (const [code, a] of group(t.items, (i) => i.taxCode.type, (i) => D(i.netAmount), (i) => D(i.vatAmount)))
-      output.push({ date: t.date, number: t.number, href: `/sales/invoices/${t.id}`, party: t.customerName, trn: t.customerTrn, code, net: a.net, vat: a.vat, kind: "Tax invoice" });
+      output.push({ date: t.date, number: t.number, href: `/sales/invoices/${t.id}`, party: t.customerName, trn: t.customerTrn, code, net: a.net, vat: a.vat, kind: "Tax invoice", emirate: t.supplyEmirate ?? companyEmirate });
   for (const c of cns)
     for (const [code, a] of group(c.items, (i) => i.taxInvoiceItem.taxCode.type, (i) => D(i.netAmount), (i) => D(i.vatAmount)))
-      output.push({ date: c.date, number: c.number!, href: `/sales/credit-notes/${c.id}`, party: c.customerName, trn: c.customerTrn, code, net: a.net.negated(), vat: a.vat.negated(), kind: "Credit note" });
+      output.push({ date: c.date, number: c.number!, href: `/sales/credit-notes/${c.id}`, party: c.customerName, trn: c.customerTrn, code, net: a.net.negated(), vat: a.vat.negated(), kind: "Credit note", emirate: c.taxInvoice.supplyEmirate ?? companyEmirate });
   for (const p of pis) {
     for (const [code, a] of group(p.items, (i) => i.taxCode.type, (i) => D(i.netAmount), (i) => D(i.vatAmount))) {
       const row = { date: p.date, number: p.number, href: `/purchase/invoices/${p.id}`, party: p.supplier.name, trn: p.supplier.trn, code, net: a.net, vat: a.vat };
@@ -74,7 +79,12 @@ export async function vatReturn(ctx: Ctx, from: Date, to: Date) {
   const b9 = pick(input, (r) => r.code === "SR");
   const b10 = pick(input, (r) => r.code === "RC");
   const b11 = { net: b9.net.plus(b10.net), vat: b9.vat.plus(b10.vat) };
-  const boxes = { b1: { ...b1, adjustmentNet: b1adjNet }, b3, b4, b5, b6, b8, b9, b10, b11, b12: b8.vat, b13: b11.vat, b14: b8.vat.minus(b11.vat) };
+  const b1ByEmirate = EMIRATES.map((e, i) => {
+    const sr = (f: (r: VatRow) => boolean) => pick(output, (r) => f(r) && r.code === "SR" && r.emirate === e.value);
+    const s = sr(sales);
+    return { box: `1${"abcdefg"[i]}`, emirate: e.value, label: e.label, net: s.net, vat: s.vat, adjustment: sr(credit).vat };
+  });
+  const boxes = { b1: { ...b1, adjustmentNet: b1adjNet }, b1ByEmirate, b3, b4, b5, b6, b8, b9, b10, b11, b12: b8.vat, b13: b11.vat, b14: b8.vat.minus(b11.vat) };
 
   // Reconciliation with the VAT accounts.
   const lines = await prisma.journalLine.findMany({

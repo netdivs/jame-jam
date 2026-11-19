@@ -23,6 +23,7 @@ export const customerSchema = z.object({
   trn,
   notes: optText(1000),
   active: bool,
+  emirate: z.union([z.enum(["ABU_DHABI", "DUBAI", "SHARJAH", "AJMAN", "UMM_AL_QUWAIN", "RAS_AL_KHAIMAH", "FUJAIRAH"]), z.literal("").transform(() => null)]).optional(),
 });
 
 export async function saveCustomer(ctx: Ctx, id: string | null, raw: unknown) {

@@ -6,6 +6,7 @@ import { fmtDate, fmtMoney, fmtSqm } from "@/lib/format";
 import { partyStatement, type PartyType } from "../accounting/ledgers";
 import type { CompanyHeader, PrintDoc } from "./types";
 import { getSetting } from "../settings";
+import { companyImages } from "../files";
 
 export const PRINT_TYPES = ["po", "grn", "so", "pi", "ti", "dn", "cn", "receipt", "pv", "refund", "pdc", "petty", "statement"] as const;
 export type PrintType = (typeof PRINT_TYPES)[number];
@@ -15,7 +16,10 @@ const nonEmpty = (xs: (string | null | undefined | false)[]) => xs.filter((x): x
 
 export async function companyHeader(): Promise<CompanyHeader> {
   const c = await prisma.companySetting.findUnique({ where: { id: 1 } });
+  const { logo, stamp } = await companyImages();
   return {
+    logo,
+    stamp,
     name: c?.legalName || c?.displayName || "Jame Jam",
     lines: nonEmpty([c?.address, c?.trn && `TRN ${c.trn}`, [c?.phone, c?.email].filter(Boolean).join(" · ") || null]),
     bank: nonEmpty([c?.bankName && `${c.bankName}${c.bankBranch ? `, ${c.bankBranch}` : ""}`, c?.bankAccountNo && `Account ${c.bankAccountNo}`, c?.iban && `IBAN ${c.iban}`, c?.swift && `SWIFT ${c.swift}`]),

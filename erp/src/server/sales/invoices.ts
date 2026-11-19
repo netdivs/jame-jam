@@ -121,6 +121,7 @@ export async function createTaxInvoice(ctx: Ctx, raw: unknown) {
         proformaInvoiceId: pi?.id ?? null,
         customerId: customer.id,
         ...customerSnapshot(customer),
+        supplyEmirate: customer.emirate ?? (await getSetting("vat.companyEmirate", tx)),
         companyName: company.legalName ?? company.displayName,
         companyAddress: company.address,
         companyTrn: company.trn,

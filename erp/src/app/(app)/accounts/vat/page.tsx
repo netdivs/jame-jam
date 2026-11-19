@@ -55,7 +55,7 @@ export default async function VatPage({ searchParams }: { searchParams: Promise<
   const v = await vatReturn(user.ctx, toDateOnly(from), toDateOnly(to));
   const b = v.boxes;
   const rows: [string, string, string | null, string | null, string | null][] = [
-    ["1", "Standard rated supplies (company's emirate)", fmtMoney(b.b1.net), fmtMoney(b.b1.vat), b.b1.adjustment && !b.b1.adjustment.isZero() ? fmtMoney(b.b1.adjustment) : null],
+    ...b.b1ByEmirate.map((e) => [e.box, `Standard rated supplies in ${e.label}`, fmtMoney(e.net), fmtMoney(e.vat), e.adjustment.isZero() ? null : fmtMoney(e.adjustment)] as [string, string, string | null, string | null, string | null]),
     ["3", "Supplies subject to the reverse charge", fmtMoney(b.b3.net), fmtMoney(b.b3.vat), null],
     ["4", "Zero rated supplies", fmtMoney(b.b4.net), null, null],
     ["5", "Exempt supplies", fmtMoney(b.b5.net), null, null],

@@ -13,6 +13,7 @@ import { createAdjustmentCreditNote, createReturnCreditNote, decideCreditNote } 
 import { customerAdvancePosition } from "../src/server/refunds/refunds";
 import { recordCustomerReceipt } from "../src/server/receipts/receipts";
 import { saveSystemSettings } from "../src/server/settings";
+import { customerTimeline } from "../src/server/crm/crm";
 import { buildPrintDoc } from "../src/server/print/documents";
 import { ctxFor, makeProduct, slabLot, uid, warehouseId } from "./helpers";
 
@@ -119,6 +120,9 @@ describe("credit notes (T7-02)", () => {
     expect(vat1.minus(vat0).toFixed(2)).toBe("10.00");
     expect((await customerAdvancePosition(cust.id)).free.minus(adv0).toFixed(2)).toBe("210.00");
     expect((await prisma.returnRequest.findUniqueOrThrow({ where: { id: rr.id } })).status).toBe("CREDITED");
+    const tl = (await customerTimeline(await ctxFor("owner"), cust.id)).map((e) => e.title);
+    for (const want of [`Tax invoice ${ti.number}`, `Return ${rr.number}`, `Credit note ${cn.number}`]) expect(tl, want).toContain(want);
+    expect(tl.some((x) => x.startsWith("Delivery note DN-"))).toBe(true);
     const pdf = await buildPrintDoc(sales, "cn", cn.id);
     expect(pdf.title).toBe("Tax Credit Note");
     expect(pdf.facts).toContainEqual(["Original invoice", ti.number]);

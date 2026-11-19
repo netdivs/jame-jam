@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
-import { ActionForm, FInput, FTextarea, SubmitButton } from "@/components/forms";
+import { ActionForm, FInput, FSelect, FTextarea, SubmitButton } from "@/components/forms";
+import { SETTINGS } from "@/server/settings";
 import { Card, Checkbox, LinkButton, PageHeader } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { prisma } from "@/server/core";
@@ -29,6 +30,13 @@ export default async function CustomerForm({ params }: { params: Promise<{ id: s
               inputMode="numeric"
               defaultValue={c?.trn ?? ""}
               hint="Optional. 15 digits. Printed on tax invoices only when present."
+            />
+            <FSelect
+              label="Emirate (place of supply)"
+              name="emirate"
+              defaultValue={c?.emirate ?? ""}
+              options={[{ value: "", label: "Company's emirate" }, ...SETTINGS["vat.companyEmirate"].options.map((o) => ({ value: o.value, label: o.label }))]}
+              hint="Used to split VAT return box 1 by emirate."
             />
           </div>
           <FTextarea label="Full address" name="address" defaultValue={c?.address ?? ""} />

@@ -22,6 +22,7 @@ Rules that differ from one business to another are **settings**, not code (TD-03
 |---|---|---|---|---|
 | `features.salesInvoicing` | Modules | Off | Tax invoices (and later DN, returns, credit notes), built on the C2/C4/C7 proposals. On only after the client confirms. | TD-045 |
 | `vat.rounding` | VAT | Per line | Per line (C4 proposal) or once per rate on the document total. SO, PI and TI. | TD-046 |
+| `vat.companyEmirate` | VAT | Dubai | Place of supply for customers without an emirate; VAT box 1a–1g split. | TD-054 |
 | `vat.invoicePriceDisplay` | VAT | Excl. VAT + inclusive reference | What the printed tax invoice shows per line. | TD-047 |
 | `sales.reservationAutoExpire` | Sales | Off | Nightly release of open SOs past validity (C2 proposal); orders with money on a proforma never expire. | TD-050 |
 | `sales.reservationReminderDays` | Sales | 2 | Dashboard warning before a reservation ends. | TD-050 |

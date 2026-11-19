@@ -12,6 +12,8 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - VAT return in the FTA VAT 201 layout with output/input registers and a check against the VAT accounts; Excel accountant pack (TD-051).
 - Reports hub with the 16 spec reports: new purchase, sales, profit per invoice, bank, expense, lot-wise stock / valuation, reservations and customer advances reports, each with filters, Excel and print (TD-052).
 - Demo data now includes invoices, delivery, a return with its credit note and a pending credit note (TD-053).
+- VAT box 1 split by emirate (customer emirate, else the company's) (TD-054); customer 360 shows invoices, deliveries, returns and credit notes (TD-055).
+- Company logo and stamp upload (Company settings), printed on every PDF; petty cash receipt photo / PDF attachment (TD-056).
 - Settings → System → Modules: tax invoicing stays off until the client confirms the VAT method (C4).
 - VAT rounding per line or per document, and the price display on printed tax invoices, are settings (TD-046, TD-047).
 

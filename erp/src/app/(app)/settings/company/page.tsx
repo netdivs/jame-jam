@@ -2,7 +2,7 @@ import { ActionForm, FInput, FTextarea, SubmitButton } from "@/components/forms"
 import { Card, PageHeader } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { prisma } from "@/server/core";
-import { saveSettingsAction } from "../actions";
+import { companyImageAction, saveSettingsAction } from "../actions";
 
 export const metadata = { title: "Company settings" };
 
@@ -45,6 +45,41 @@ export default async function CompanySettings() {
         </fieldset>
         {!readOnly && <SubmitButton>Save settings</SubmitButton>}
       </ActionForm>
+      <Card title="Logo and stamp (printed on documents)" className="mt-5 max-w-4xl">
+        <div className="grid gap-6 md:grid-cols-2">
+          {(["LOGO", "STAMP"] as const).map((kind) => {
+            const id = kind === "LOGO" ? s.logoFileId : s.stampFileId;
+            return (
+              <div key={kind} className="space-y-3">
+                <h3 className="text-sm font-semibold">{kind === "LOGO" ? "Logo (top left of every document)" : "Stamp (above the signature)"}</h3>
+                {id ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`/api/files/${id}`} alt={kind === "LOGO" ? "Company logo" : "Company stamp"} className="h-20 rounded border border-border bg-white object-contain p-1" />
+                ) : (
+                  <p className="text-sm text-muted">Not set.</p>
+                )}
+                {!readOnly && (
+                  <>
+                    <ActionForm action={companyImageAction.bind(null, kind)} className="flex flex-wrap items-end gap-2">
+                      <label className="text-xs font-medium">
+                        PNG or JPEG, up to 1 MB
+                        <input type="file" name="file" accept="image/png,image/jpeg" required className="mt-1 block text-sm" aria-label={kind === "LOGO" ? "Logo file" : "Stamp file"} />
+                      </label>
+                      <SubmitButton variant="secondary" pendingText="Uploading…">{id ? "Replace" : "Upload"}</SubmitButton>
+                    </ActionForm>
+                    {id && (
+                      <ActionForm action={companyImageAction.bind(null, kind)}>
+                        <input type="hidden" name="remove" value="1" />
+                        <SubmitButton variant="secondary" pendingText="Removing…">Remove</SubmitButton>
+                      </ActionForm>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
     </>
   );
 }

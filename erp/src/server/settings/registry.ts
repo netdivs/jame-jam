@@ -44,6 +44,22 @@ export const SETTINGS = {
       { value: "PER_DOCUMENT", label: "Once on the document total" },
     ],
   },
+  "vat.companyEmirate": {
+    group: "vat",
+    kind: "enum",
+    label: "Company's emirate",
+    help: "VAT return box 1 is split by emirate. A tax invoice counts in its customer's emirate (customer record), or in this one when the customer has none.",
+    default: "DUBAI",
+    options: [
+      { value: "ABU_DHABI", label: "Abu Dhabi" },
+      { value: "DUBAI", label: "Dubai" },
+      { value: "SHARJAH", label: "Sharjah" },
+      { value: "AJMAN", label: "Ajman" },
+      { value: "UMM_AL_QUWAIN", label: "Umm Al Quwain" },
+      { value: "RAS_AL_KHAIMAH", label: "Ras Al Khaimah" },
+      { value: "FUJAIRAH", label: "Fujairah" },
+    ],
+  },
   "vat.invoicePriceDisplay": {
     group: "vat",
     kind: "enum",

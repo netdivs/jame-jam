@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { formObject, runAction, type ActionState } from "@/lib/action";
 import { saveBusinessRules, saveSettings, saveUser, setUserPermissionOverrides } from "@/server/masters";
 import { saveSystemSettings } from "@/server/settings";
+import { setCompanyImage } from "@/server/files";
 
 export async function saveSettingsAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const r = await runAction(async (u) => {
@@ -50,5 +51,21 @@ export async function userPermissionsAction(id: string, _: ActionState, fd: Form
     return saved.length ? `${saved.length} permission override${saved.length === 1 ? "" : "s"} saved` : "No overrides: the user has exactly their role's permissions";
   });
   if (r.ok) revalidatePath(`/settings/users/${id}`);
+  return r;
+}
+
+/** Upload (or remove with `remove=1`) the company logo / stamp; field `file`. */
+export async function companyImageAction(kind: "LOGO" | "STAMP", _: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    if (fd.get("remove") === "1") {
+      await setCompanyImage(u.ctx, kind, null);
+      return `${kind === "LOGO" ? "Logo" : "Stamp"} removed`;
+    }
+    const f = fd.get("file");
+    const file = f instanceof File ? { name: f.name, bytes: Buffer.from(await f.arrayBuffer()) } : { name: "", bytes: Buffer.alloc(0) };
+    await setCompanyImage(u.ctx, kind, file);
+    return `${kind === "LOGO" ? "Logo" : "Stamp"} saved — it appears on printed documents`;
+  });
+  if (r.ok) revalidatePath("/settings/company");
   return r;
 }

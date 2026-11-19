@@ -1,6 +1,6 @@
 # Jame Jam ERP: Development Status
 
-**Last updated:** 18 Nov 2026 (Step 5 part 1, customer receipts, bank accounts, journal vouchers, financial reports and scheduled jobs on `feat/step5-sales`)
+**Last updated:** 20 Nov 2026 (business policy settings, tax invoices, delivery, returns, credit notes, reservation expiry, VAT return, reports hub, demo data on `feat/business-settings`)
 **Spec:** `requirements/jame_jam_erp_system_technical_specification.md` (v2.4)
 **Repo:** `git@github.com:netdivs/jame-jam.git`, branch `main`
 **Live (demo):** https://jame.netdivs.us
@@ -14,21 +14,20 @@
 | 1 | Foundation | ✅ Done |
 | 2 | Masters | ✅ Done |
 | 3 | Inventory core (D2, D3) | ✅ Done |
-| 4 | Purchase & import (D5, R3, R6) | ✅ Development complete and verified (17 Nov 2026). Not deployed. Browser-verified (T4-11). Deployment deferred until all steps are done (user, 18 Nov 2026). Still to come: client confirmation of C1/C5/C6 |
-| 5 | Sales: SO, PI, TI (D1, D4, R1) | 🔨 In progress. Sales orders with reservation (D1) and proforma invoices with expiry/renewal (R1) are built and verified. VAT maths (D4) built as the C4 proposal. Tax invoices wait for C4; reservation expiry waits for C2 |
-| 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | 🔨 In progress: customer receipts/advances (CR/RV) and post-dated cheques (R5) built. Allocation to invoices and the DN wait for the tax invoice (C4) |
-| 7 | Returns & credit notes (R2, R4) | ⏳ Not started |
-| 8 | Accounts: ledgers, petty cash, bank rec, JV | 🟡 Partly done: chart of accounts, journals, period lock, bank accounts, manual journal vouchers, trial balance / P&L / balance sheet. refund vouchers and supplier advance transfers (T8-06, T4-15), petty cash and the Daily Cash report (T8-04), bank reconciliation (T8-05), customer and supplier ledgers and statements (T8-01). Step 8 development is complete except PDF/Excel export of statements (TX-01/02) |
-| 9 | VAT & reports (R7) | ⏳ Not started |
-| 10 | CRM (R9) | ✅ Development complete (18 Nov 2026), not deployed: leads, opportunities → SO, interactions, follow-ups and reminders, customer 360, reports (TD-031) |
-| 11 | Opening setup (R8), mobile dashboard, demo data, client demo | 🟡 Partly done (opening stock entry, demo stock) |
+| 4 | Purchase & import (D5, R3, R6) | ✅ Done. C1/C5/C6 run as proposed; credit purchases, invoice tolerance, category basis and bank-charge treatment are settings (TD-040…043) |
+| 5 | Sales: SO, PI, TI (D1, D4, R1) | ✅ Built. Tax invoices on the C4 proposal behind the module switch `features.salesInvoicing` (off until the client confirms, TD-045); reservation expiry on the C2 proposal behind `sales.reservationAutoExpire` (off, TD-050) |
+| 6 | Receipts & dispatch: CR/RV, PDC, DN (R10, R5) | ✅ Built. DN only for fully paid invoices (TD-048), behind the module switch |
+| 7 | Returns & credit notes (R2, R4) | ✅ Built on the C7 proposal behind the module switch (TD-049) |
+| 8 | Accounts: ledgers, petty cash, bank rec, JV | ✅ Done |
+| 9 | VAT & reports (R7) | ✅ Done: VAT return + registers + accountant pack (TD-051); reports hub with the 16 spec reports (TD-052) |
+| 10 | CRM (R9) | ✅ Done (customer 360 now shows invoices, deliveries, returns and credit notes) |
+| 11 | Opening setup (R8), mobile dashboard, demo data, client demo | ✅ Opening balances, imports, dashboard, demo data (TD-053). Client demo / UAT (T11-06) still to do |
 
-**Automated tests:** 46, all passing on the local test database (re-verified 17 Nov 2026):
-- Foundation: 10
-- Inventory: 15
-- Purchase: 21
+**Production:** deployed 19 Nov 2026 at `main` 90e730d (Steps 1–5 base, before this branch). This branch is not deployed; it needs `db:seed:base` after deploy (new permissions).
 
-**Quality gates (18 Nov 2026, local):** typecheck ✅ · lint ✅ · tests ✅ 104/104 · `next build` ✅ · migration drift ✅ none · Playwright E2E ✅ 22/22 (desktop and mobile). CI workflow written (`.github/workflows/ci.yml`, TQ-01) but not run yet — the branch has not been pushed.
+**Quality gates (20 Nov 2026, local):** typecheck ✅ · lint ✅ · Vitest ✅ 157/157 · `next build` ✅ · migration drift ✅ none · Playwright ✅ 36/36 (desktop and mobile).
+
+**Still open:** client decisions C1–C7 (switch the modules on when confirmed), TS-01 automated backups (needs server approval), T11-06 UAT and client demo.
 
 The verified audit behind this file is [docs/audit/2026-11-17-repository-audit.md](docs/audit/2026-11-17-repository-audit.md). Tasks: [TASKS.md](TASKS.md). Decisions: [DECISIONS.md](DECISIONS.md).
 
@@ -377,6 +376,10 @@ User page → "Permission overrides". Vitest 113/113; Playwright 26/26.
 ## 6p. Excel imports (T11-02 — 19 Nov 2026)
 
 `/settings/imports`, `erp/src/server/imports/index.ts`, template route `/api/import-template/<entity>`. TD-037. Vitest 121/121; Playwright 32/32 twice. Open item: the demo-data test failed once in seven full runs and could not be reproduced; its checks now carry labels so a repeat names the failing check.
+
+## 6q. Business policy settings and the remaining modules (19–20 Nov 2026, branch `feat/business-settings`)
+
+Settings → System holds every switchable rule (registry, TD-039): credit purchases, invoice tolerance, landed cost basis per category, bank charges, cash refund limit (TD-040…044). Tax invoices with advance knock-off and FTA print, delivery notes, returns and credit notes, reservation expiry — all on the client-decision proposals and behind settings that are off by default (TD-045…050). VAT return in the VAT 201 layout with registers, GL tie-out and the Excel accountant pack (TD-051). Reports hub and the new spec reports (TD-052). Demo data covers the invoicing cycle (TD-053). Tests: `settings`, `policy-settings`, `invoices`, `delivery`, `returns`, `reservations`, `vat-report`, `reports` (Vitest) and `settings-flow`, `invoice-flow`, `print-export` (Playwright).
 
 ## 7. Deployment
 

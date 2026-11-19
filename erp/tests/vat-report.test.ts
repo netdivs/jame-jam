@@ -52,7 +52,7 @@ describe("VAT return (T9-01)", () => {
     const p = await makeProduct("TILE");
     const lot = await createOpeningLot(owner, { productId: p.id, warehouseId: await warehouseId(), receivedDate: "2026-01-05", costPerSqm: "40", tileSqm: "20" });
     const bucket = await prisma.stockBalance.findFirstOrThrow({ where: { lotId: lot.id } });
-    const cust = await prisma.customer.create({ data: { code: `C-${uid()}`, name: `VAT customer ${uid()}`, trn: "100000000000003" } });
+    const cust = await prisma.customer.create({ data: { code: `C-${uid()}`, name: `VAT customer ${uid()}`, trn: "100000000000003", emirate: "SHARJAH" } });
     const so = await saveSalesOrder(sales, null, { customerId: cust.id, date: "2026-02-10", priceMode: "INCLUSIVE", lines: [{ balanceId: bucket.id, sqm: "10", unitPrice: "105" }] });
     const ti = await createTaxInvoice(sales, { salesOrderId: so.id, date: "2026-02-10" });
     await createAdjustmentCreditNote(owner, { taxInvoiceId: ti.id, date: "2026-02-12", reason: "Price correction", lines: [{ taxInvoiceItemId: ti.items[0].id, amount: "21" }] });
@@ -78,6 +78,12 @@ describe("VAT return (T9-01)", () => {
     expect(d(r.boxes.b14, before.boxes.b14)).toBe("34.00"); // (50 − 1 + 10 + 25) − (15 + 35)
     expect(r.output.find((x) => x.number === ti.number)).toMatchObject({ code: "SR", trn: "100000000000003" });
     expect(r.reconciliation.ok).toBe(true);
+    // Box 1 by emirate: the Sharjah customer's invoice and credit note land in 1c; the parts add up to box 1.
+    const sh = (x: typeof r) => x.boxes.b1ByEmirate.find((e) => e.emirate === "SHARJAH")!;
+    expect(sh(r).box).toBe("1c");
+    expect([d(sh(r).net, sh(before).net), d(sh(r).vat, sh(before).vat), d(sh(r).adjustment, sh(before).adjustment)]).toEqual(["1000.00", "50.00", "-1.00"]);
+    expect(r.boxes.b1ByEmirate.reduce((a, e) => a.plus(e.vat), D(0)).toFixed(2)).toBe(r.boxes.b1.vat.toFixed(2));
+    expect((await prisma.taxInvoice.findUniqueOrThrow({ where: { id: ti.id } })).supplyEmirate).toBe("SHARJAH");
 
     const pack = await buildExport(owner, "vat-pack", new URLSearchParams({ from: "2026-02-01", to: "2026-02-28" }));
     expect(pack.sheets.map((s) => s.name)).toEqual(["VAT return", "Output VAT", "Input VAT", "Trial balance"]);

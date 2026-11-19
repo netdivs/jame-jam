@@ -151,10 +151,10 @@ export async function buildExport(ctx: Ctx, report: string, q: URLSearchParams):
         fileName: `vat-pack-${from}-to-${to}`,
         sheets: [
           {
-            name: "VAT return", title: "VAT return (FTA VAT 201 layout)", filters: [`From ${from} to ${to}`, "Box 1 is reported in the company's emirate (emirate split not tracked)", v.reconciliation.ok ? "Ties to the VAT accounts" : "Does NOT tie to the VAT accounts — see the screen"],
+            name: "VAT return", title: "VAT return (FTA VAT 201 layout)", filters: [`From ${from} to ${to}`, v.reconciliation.ok ? "Ties to the VAT accounts" : "Does NOT tie to the VAT accounts — see the screen"],
             columns: [{ key: "box", label: "Box", width: 6 }, { key: "label", label: "Description", width: 52 }, { key: "net", label: "Amount (AED)", kind: "money" }, { key: "vat", label: "VAT (AED)", kind: "money" }, { key: "adj", label: "Adjustment (AED)", kind: "money" }],
             rows: [
-              box("1", "Standard rated supplies", b.b1.net, b.b1.vat, b.b1.adjustment ?? null),
+              ...b.b1ByEmirate.map((e) => box(e.box, `Standard rated supplies in ${e.label}`, e.net, e.vat, e.adjustment)),
               box("3", "Supplies subject to the reverse charge", b.b3.net, b.b3.vat),
               box("4", "Zero rated supplies", b.b4.net, null),
               box("5", "Exempt supplies", b.b5.net, null),

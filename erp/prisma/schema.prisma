@@ -130,6 +130,27 @@ enum AllocationBasis {
   QUANTITY
 }
 
+enum FileKind {
+  LOGO
+  STAMP
+  PETTY_RECEIPT
+}
+
+/// An uploaded file, kept in the database (TD-056): small images / PDFs, covered by the database backup.
+model StoredFile {
+  id          String   @id @default(cuid())
+  kind        FileKind
+  fileName    String
+  mimeType    String
+  size        Int
+  sha256      String
+  data        Bytes
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([kind])
+}
+
 /// Business policy settings (TD-039): one row per key from the registry in src/server/settings/registry.ts.
 /// A key with no row uses the registry default, so a new setting needs no data migration.
 model SystemSetting {
@@ -163,6 +184,9 @@ model CompanySetting {
   poApprovalThreshold    Decimal         @default(0) @db.Decimal(18, 2)
   landedCostDefaultBasis AllocationBasis @default(SQM)
   pdcReminderDays        Int             @default(7)
+  /// Printed on documents (TD-056). StoredFile ids.
+  logoFileId             String?
+  stampFileId            String?
   updatedAt              DateTime        @updatedAt
 }
 
@@ -326,6 +350,17 @@ model Warehouse {
   receipts  GoodsReceipt[]
 }
 
+/// UAE emirates, for the VAT return box 1 split (place of supply).
+enum Emirate {
+  ABU_DHABI
+  DUBAI
+  SHARJAH
+  AJMAN
+  UMM_AL_QUWAIN
+  RAS_AL_KHAIMAH
+  FUJAIRAH
+}
+
 model Customer {
   id                 String              @id @default(cuid())
   code               String              @unique
@@ -361,6 +396,8 @@ model Customer {
   deliveryNotes      DeliveryNote[]
   returnRequests     ReturnRequest[]
   creditNotes        CreditNote[]
+  /// Where supplies to this customer are made (VAT box 1); empty = the company's emirate.
+  emirate            Emirate?
 }
 
 enum SupplierType {
@@ -1172,6 +1209,8 @@ model TaxInvoice {
   customerAddress   String?
   customerTrn       String?
   customerMobile    String?
+  /// Place of supply for VAT box 1 (customer's emirate, else the company's) at the time of the invoice.
+  supplyEmirate     Emirate?
   /// Supplier (our company) details as printed, for FTA (spec §3.3.4).
   companyName       String
   companyAddress    String?
@@ -1707,6 +1746,9 @@ model PettyCashTransaction {
   cancelledById      String?
   createdById        String?
   createdAt          DateTime         @default(now())
+
+  /// Photo or PDF of the paper receipt (StoredFile id, TD-056).
+  attachmentFileId String?
 
   @@index([pettyCashAccountId, date])
   @@index([categoryId])
