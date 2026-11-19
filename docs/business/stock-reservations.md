@@ -1,5 +1,7 @@
 # Stock reservations
 
+**Update 19 Nov 2026:** reservation expiry and extension are built on the C2 proposal behind setting `sales.reservationAutoExpire` (off by default) — `erp/src/server/sales/reservations.ts`, job `so-expiry`, TD-050.
+
 Purpose: hold stock for a Sales Order so no other order can take it, and release or consume it later.
 
 **Implementation status:** Partial. Reservation engine Done (Step 3); Sales Order integration Done (Step 5); reservation expiry Blocked by C2.

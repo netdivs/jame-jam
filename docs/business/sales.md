@@ -2,7 +2,7 @@
 
 Purpose: Sales Order (with stock reservation), Proforma Invoice (with automatic expiry) and Tax Invoice (VAT-inclusive pricing).
 
-**Implementation status:** Partial (Step 5, branch `feat/step5-sales`). Sales orders with reservation and proforma invoices with expiry/renewal are built; VAT maths built as the C4 proposal; Tax Invoice Planned (blocked by C4); reservation expiry blocked by C2.
+**Implementation status:** Sales orders with reservation and proforma invoices with expiry/renewal are built. **Tax invoices are built on the C4 proposal behind the module switch `features.salesInvoicing` (off until the client confirms, TD-045)**: from an SO or by converting a PI, FTA print, automatic knock-off of advances held on the SO's proformas, free advance applied by a user, receipts against an invoice. VAT rounding and print layout are settings (TD-046/047). Reservation expiry blocked by C2.
 
 ## 1. Business purpose
 
@@ -77,7 +77,7 @@ Required: create, edit, cancel, reserve/release, PI expiry/renewal, tax code cha
 | Sales orders + reservation | Done | `sales/orders.ts`, `/sales/orders` |
 | Proforma invoices, renewal, close/cancel | Done | `sales/proformas.ts`, `/sales/proformas` |
 | VAT maths (C4 proposal) | Built, pending C4 | `sales/vat.ts` |
-| Tax invoice | Planned (T5-06, C4) | — |
+| Tax invoice + advance knock-off | Built behind `features.salesInvoicing` (T5-06/07, C4 pending) | `sales/invoices.ts`, `/sales/invoices`, `tests/invoices.test.ts`, `e2e/invoice-flow.spec.ts` |
 | PI expiry job | Function ready (`expireProformaInvoices`); scheduler Planned (TJ-01) | — |
 | Sales report, Profit per Invoice, Open/Expired PIs | Planned (Step 9) | — |
 | SO/PI/TI PDFs | Planned | — |

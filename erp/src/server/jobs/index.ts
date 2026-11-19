@@ -9,6 +9,7 @@ import { expireProformaInvoices } from "../sales/proformas";
 import { inventoryReconciliation } from "../inventory/queries";
 import { chequesDue, pdcReconciliation } from "../receipts/cheques";
 import { followUpsDue } from "../crm/crm";
+import { expireSalesOrders } from "../sales/reservations";
 
 type JobResult = { status: "OK" | "WARNING"; result: Record<string, unknown> };
 
@@ -68,7 +69,13 @@ export const JOBS: Record<string, { title: string; run: (asOf: Date, ctx: Ctx) =
       return { status: "OK", result: { open: due.length, byUser } };
     },
   },
-  // SO reservation expiry joins here once client decision C2 is answered (T5-03).
+  "so-expiry": {
+    title: "Release open sales orders past their reservation validity (C2 proposal; only when switched on in Settings → System)",
+    run: async (asOf, ctx) => {
+      const r = await expireSalesOrders(asOf, ctx);
+      return { status: "OK", result: r.enabled ? { expired: r.expired, protectedByAdvance: r.protectedOrders } : { switchedOff: true } };
+    },
+  },
 };
 
 export type JobOutcome = { job: string; status: "OK" | "WARNING" | "FAILED" | "SKIPPED"; result?: unknown; error?: string };

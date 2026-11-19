@@ -1,6 +1,6 @@
 // PDF rendering with @react-pdf/renderer (TX-01, TD-035): A4, built-in Helvetica (no external fonts or network),
 // repeating table header, page numbers. Pure layout: the data comes in as a PrintDoc.
-import { Document, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
+import { Document, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import type { CompanyHeader, PrintDoc } from "./types";
 
 const ink = "#0f1b33";
@@ -30,6 +30,8 @@ function PrintPdf({ doc, company, printedAt }: { doc: PrintDoc; company: Company
     <Document title={`${doc.title} ${doc.number}`} author={company.name} creator="Jame Jam ERP" producer="Jame Jam ERP">
       <Page size="A4" style={s.page}>
         <View style={s.row}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt */}
+          {company.logo && <Image src={company.logo} style={{ width: 64, height: 48, objectFit: "contain", marginRight: 10 }} />}
           <View style={{ flex: 1 }}>
             <Text style={s.company}>{company.name}</Text>
             {company.lines.map((l, i) => (
@@ -104,10 +106,17 @@ function PrintPdf({ doc, company, printedAt }: { doc: PrintDoc; company: Company
           </View>
         )}
         {doc.signatures && doc.signatures.length > 0 && (
-          <View style={[s.row, { marginTop: 40 }]} wrap={false}>
-            {doc.signatures.map((x) => (
-              <Text key={x} style={s.sign}>{x}</Text>
-            ))}
+          <View wrap={false}>
+            {/* The company stamp sits above the first signature box (ours). */}
+            <View style={[s.row, { marginTop: company.stamp ? 8 : 40, height: company.stamp ? 72 : 0 }]}>
+              {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf Image has no alt */}
+              {company.stamp && <Image src={company.stamp} style={{ width: 90, height: 64, objectFit: "contain", marginLeft: 16 }} />}
+            </View>
+            <View style={s.row}>
+              {doc.signatures.map((x) => (
+                <Text key={x} style={s.sign}>{x}</Text>
+              ))}
+            </View>
           </View>
         )}
         <View style={s.footer} fixed>

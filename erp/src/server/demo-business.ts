@@ -1,7 +1,8 @@
 // Demo business data for the client demo (spec §10, T4-12 / T11-03). Runs after seedDemoInventory, through the real
 // services (so GL, stock, audit and numbering are exactly what users would produce). All names are fictional.
 //  - Skipped when any purchase order exists (an install with real or earlier demo activity), unless forced (tests).
-//  - Not included until client decision C4 is answered: tax invoices, delivery notes, credit notes, the VAT period.
+//  - Tax invoices, delivery notes, a return with its credit note and a pending adjustment credit note are included
+//    (C4/C7 proposals, TD-045): the module switch is turned on only while they are seeded, then put back.
 import type { PrismaClient } from "@prisma/client";
 import { Ctx, D, today } from "./core";
 import { approvePurchaseOrder, createShipment, savePurchaseOrder, setShipmentStatus, submitPurchaseOrder, verifyPoPayment } from "./purchase/orders";
@@ -15,6 +16,10 @@ import { recordCustomerReceipt } from "./receipts/receipts";
 import { changeChequeStatus, recordIssuedCheque, recordReceivedCheque, replaceReceivedCheque } from "./receipts/cheques";
 import { recordPettyExpense, recordPettyTopUp } from "./accounting/petty-cash";
 import { addStatementLine } from "./accounting/bank-rec";
+import { createTaxInvoice } from "./sales/invoices";
+import { createDeliveryNote } from "./sales/delivery";
+import { createReturnRequest, decideReturnRequest, receiveReturn } from "./sales/returns";
+import { createAdjustmentCreditNote, createReturnCreditNote } from "./sales/credit-notes";
 import { convertLead, createFollowUp, logInteraction, saveLead, saveOpportunity, setLeadStatus, setOpportunityStage } from "./crm/crm";
 
 const day = (offset: number) => new Date(today().getTime() + offset * 86_400_000).toISOString().slice(0, 10);
@@ -154,6 +159,41 @@ export async function seedDemoBusiness(db: PrismaClient, opts: { force?: boolean
   await changeChequeStatus(ctx, bad.id, { action: "deposit", date: day(-9) });
   await changeChequeStatus(ctx, bad.id, { action: "bounce", date: day(-6), remarks: "Insufficient funds", bankCharges: "52.50" });
   await replaceReceivedCheque(ctx, bad.id, { chequeNo: "558140", bankName: "Mashreq", amount: "800", issueDate: day(-5), dueDate: day(10), date: day(-5) });
+
+  // ── Tax invoices, delivery, return and credit notes (C4/C7 proposals; module switched on only while seeding) ──
+  const prevSwitch = await db.systemSetting.findUnique({ where: { key: "features.salesInvoicing" } });
+  await db.systemSetting.upsert({ where: { key: "features.salesInvoicing" }, create: { key: "features.salesInvoicing", value: { v: true } }, update: { value: { v: true } } });
+  try {
+    const free = async (productId: string, need: number) => {
+      const bs = await db.stockBalance.findMany({ where: { productId, slabId: null } });
+      return bs.find((b) => D(b.onHandSqm).minus(b.reservedSqm).gte(need)) ?? null;
+    };
+    const bA = await free(btt3060!.id, 20);
+    if (bA) {
+      // Paid in two parts (advance on the proforma, then the rest), delivered, 2 SQM returned and credited.
+      const so4 = await saveSalesOrder(ctx, null, { customerId: desertRose.id, date: day(-14), notes: "Showroom floor (demo)", lines: [{ balanceId: bA.id, sqm: "20", unitPrice: "95" }] });
+      const pi4 = await createProformaInvoice(ctx, { salesOrderId: so4.id, date: day(-14) });
+      await recordCustomerReceipt(ctx, { proformaInvoiceId: pi4.id, date: day(-13), amount: "950", mode: "BANK", reference: "TT 9020" });
+      const ti4 = await createTaxInvoice(ctx, { proformaInvoiceId: pi4.id, date: day(-12) });
+      await recordCustomerReceipt(ctx, { taxInvoiceId: ti4.id, date: day(-11), amount: D(ti4.total).minus(950).toFixed(2), mode: "CASH", reference: "Balance at collection" });
+      await createDeliveryNote(ctx, { taxInvoiceId: ti4.id, date: day(-10), vehicleNo: "DXB K 48211", driverName: "Imran", receivedBy: "Site supervisor (demo)" });
+      const rr = await createReturnRequest(ctx, { taxInvoiceId: ti4.id, date: day(-8), reason: "Two boxes left over (demo)", lines: [{ taxInvoiceItemId: ti4.items[0].id, sqm: "2" }] });
+      await decideReturnRequest(ctx, rr.id, "APPROVED", "Unopened boxes");
+      await receiveReturn(ctx, rr.id, { date: day(-7), lines: [{ returnRequestItemId: rr.items[0].id, receivedSqm: "2", condition: "GOOD" }] });
+      await createReturnCreditNote(ctx, rr.id, { date: day(-7) });
+    }
+    const bB = await free(btt60120!.id, 12);
+    if (bB) {
+      // Invoiced, not paid yet (delivery blocked), with an adjustment credit note waiting for approval.
+      const so5 = await saveSalesOrder(ctx, null, { customerId: palmCoast.id, date: day(-5), notes: "Villa 12 terrace (demo)", lines: [{ balanceId: bB.id, sqm: "12", unitPrice: "150" }] });
+      const ti5 = await createTaxInvoice(ctx, { salesOrderId: so5.id, date: day(-4) });
+      const acct = await db.user.findFirst({ where: { role: { key: "accountant" } } });
+      await createAdjustmentCreditNote({ userId: acct?.id ?? owner.id, permissions: new Set(["creditNotes.create"]) }, { taxInvoiceId: ti5.id, date: day(-3), reason: "Agreed 5% discount for chipped edges (demo)", lines: [{ taxInvoiceItemId: ti5.items[0].id, amount: "90" }] });
+    }
+  } finally {
+    if (prevSwitch) await db.systemSetting.update({ where: { key: "features.salesInvoicing" }, data: { value: prevSwitch.value ?? { v: false } } });
+    else await db.systemSetting.delete({ where: { key: "features.salesInvoicing" } });
+  }
 
   // ── Petty cash ──
   const box = await db.pettyCashAccount.findFirst({ where: { active: true }, orderBy: { code: "asc" } });

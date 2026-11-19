@@ -29,13 +29,19 @@ export default async function SupplierForm({ params }: { params: Promise<{ id: s
                 { value: "LOCAL", label: "Local (UAE)" },
                 { value: "IMPORT", label: "Import (overseas)" },
               ]}
-              hint="Both types are paid 100% before goods are collected."
+              hint="Whether goods may arrive before payment is set by credit terms below and Settings → System."
             />
             <FInput label="Contact person" name="contactPerson" defaultValue={s?.contactPerson ?? ""} />
             <FInput label="Mobile" name="mobile" type="tel" defaultValue={s?.mobile ?? ""} />
             <FInput label="Email" name="email" type="email" defaultValue={s?.email ?? ""} />
             <FInput label="TRN" name="trn" inputMode="numeric" defaultValue={s?.trn ?? ""} hint="Optional. 15 digits (UAE suppliers)." />
           </div>
+          <fieldset disabled={!user.ctx.permissions.has("purchase.approve")} className="grid gap-4 rounded-md border border-border p-3 sm:grid-cols-2">
+            <legend className="px-1 text-xs font-medium">Credit terms {!user.ctx.permissions.has("purchase.approve") && <span className="text-muted">(Owner / Manager only)</span>}</legend>
+            <input type="hidden" name="creditTerms" value="1" />
+            <Checkbox name="creditAllowed" label="Supplier gives credit" defaultChecked={s?.creditAllowed ?? false} />
+            <FInput label="Credit days" name="creditDays" type="number" min={0} max={365} defaultValue={s?.creditDays ?? ""} hint="Fills the supplier invoice due date. With the setting “only suppliers with credit allowed”, goods can be received before payment." />
+          </fieldset>
           <FTextarea label="Address" name="address" defaultValue={s?.address ?? ""} />
           <FTextarea label="Notes" name="notes" defaultValue={s?.notes ?? ""} />
           {!isNew && <Checkbox name="active" label="Active" defaultChecked={s!.active} />}

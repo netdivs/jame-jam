@@ -1,12 +1,14 @@
 // Printable documents (T11-05, TD-035): each builder loads one stored document, checks the user may view it, and
 // maps it to a PrintDoc. Figures come from the stored values and snapshots, formatted like the screens.
-// Not yet (wait for C4/C7): tax invoice, delivery note, credit note.
+// Tax invoice, delivery note and credit note: built on the C4/C7 proposals (module switch features.salesInvoicing).
 import { AppError, Ctx, D, assertCan, prisma, toDateOnly } from "../core";
 import { fmtDate, fmtMoney, fmtSqm } from "@/lib/format";
 import { partyStatement, type PartyType } from "../accounting/ledgers";
 import type { CompanyHeader, PrintDoc } from "./types";
+import { getSetting } from "../settings";
+import { companyImages } from "../files";
 
-export const PRINT_TYPES = ["po", "grn", "so", "pi", "receipt", "pv", "refund", "pdc", "petty", "statement"] as const;
+export const PRINT_TYPES = ["po", "grn", "so", "pi", "ti", "dn", "cn", "receipt", "pv", "refund", "pdc", "petty", "statement"] as const;
 export type PrintType = (typeof PRINT_TYPES)[number];
 
 const AED = (v: { toString(): string } | number) => `AED ${fmtMoney(D(v.toString()))}`;
@@ -14,7 +16,10 @@ const nonEmpty = (xs: (string | null | undefined | false)[]) => xs.filter((x): x
 
 export async function companyHeader(): Promise<CompanyHeader> {
   const c = await prisma.companySetting.findUnique({ where: { id: 1 } });
+  const { logo, stamp } = await companyImages();
   return {
+    logo,
+    stamp,
     name: c?.legalName || c?.displayName || "Jame Jam",
     lines: nonEmpty([c?.address, c?.trn && `TRN ${c.trn}`, [c?.phone, c?.email].filter(Boolean).join(" · ") || null]),
     bank: nonEmpty([c?.bankName && `${c.bankName}${c.bankBranch ? `, ${c.bankBranch}` : ""}`, c?.bankAccountNo && `Account ${c.bankAccountNo}`, c?.iban && `IBAN ${c.iban}`, c?.swift && `SWIFT ${c.swift}`]),
@@ -146,6 +151,120 @@ async function pi(ctx: Ctx, id: string): Promise<PrintDoc> {
       p.notes,
       "Natural stone varies in colour, veining and size; slabs are sold as selected.",
     ]),
+  };
+}
+
+/** Tax invoice with the FTA fields (spec §3.3.4): supplier name/address/TRN, customer TRN when present, per line the
+ *  unit price excl. VAT, quantity, VAT rate and amount; totals in AED. Supplier details come from the snapshot. */
+async function ti(ctx: Ctx, id: string): Promise<PrintDoc> {
+  assertCan(ctx, "sales.view");
+  const t = (await prisma.taxInvoice.findUnique({ where: { id }, include: { salesOrder: true, proformaInvoice: true, items: { orderBy: { lineNo: "asc" }, include: { product: true, taxCode: true } } } })) ?? notFound("Tax invoice");
+  const withRef = (await getSetting("vat.invoicePriceDisplay")) === "EXCLUSIVE_WITH_INCLUSIVE_REF";
+  const money = (v: { toString(): string }) => fmtMoney(D(v.toString()));
+  return {
+    title: "Tax Invoice",
+    number: t.number,
+    fileName: t.number,
+    facts: nonEmpty([`Invoice date|${fmtDate(t.date)}`, `Date of supply|${fmtDate(t.date)}`, `Sales order|${t.salesOrder.number}`, t.proformaInvoice && `Proforma|${t.proformaInvoice.number}`]).map((x) => x.split("|") as [string, string]),
+    party: { label: "Bill to", lines: nonEmpty([t.customerName, t.customerAddress, t.customerTrn && `TRN ${t.customerTrn}`, t.customerMobile]) },
+    extra: { label: "Supplier", lines: nonEmpty([t.companyName, t.companyAddress, t.companyTrn && `TRN ${t.companyTrn}`]) },
+    columns: [
+      { key: "n", label: "#", width: 0.4 },
+      { key: "item", label: "Description", width: 2.8 },
+      { key: "sqm", label: "SQM", align: "right", width: 1 },
+      { key: "excl", label: "Unit price excl. VAT", align: "right", width: 1.2 },
+      ...(withRef ? [{ key: "incl", label: "Unit price incl. VAT (ref.)", align: "right" as const, width: 1.2 }] : []),
+      { key: "net", label: "Taxable amount", align: "right", width: 1.2 },
+      { key: "rate", label: "VAT %", align: "right", width: 0.6 },
+      { key: "vat", label: "VAT (AED)", align: "right", width: 1 },
+      { key: "total", label: "Total (AED)", align: "right", width: 1.2 },
+    ],
+    rows: t.items.map((i) => ({
+      n: String(i.lineNo),
+      item: `${i.product.name}${i.description ? `\n${i.description}` : ""}${D(i.discount).plus(i.headerDiscount).gt(0) ? `\nDiscount ${money(D(i.discount).plus(i.headerDiscount))}` : ""}`,
+      sqm: fmtSqm(D(i.sqm)),
+      excl: D(i.sqm).gt(0) ? D(i.netAmount).div(i.sqm).toFixed(4) : "",
+      incl: D(i.sqm).gt(0) ? D(i.grossAmount).div(i.sqm).toFixed(4) : "",
+      net: money(i.netAmount),
+      rate: i.taxCode.type === "SR" ? D(i.taxCode.rate).toString() : `0 (${i.taxCode.code})`,
+      vat: money(i.vatAmount),
+      total: money(i.grossAmount),
+    })),
+    totals: [
+      ...(D(t.discount).gt(0) ? ([["Invoice discount (included above)", AED(t.discount)]] as [string, string][]) : []),
+      ["Total excl. VAT", AED(t.netTotal)],
+      ["VAT", AED(t.vatTotal)],
+      ["Total incl. VAT", AED(t.total)],
+      ...(D(t.settledAmount).gt(0) ? ([["Paid", AED(t.settledAmount)], ["Balance due", AED(D(t.total).minus(t.settledAmount))]] as [string, string][]) : []),
+    ],
+    notes: nonEmpty([t.notes, "Goods are released against a delivery note once this invoice is paid in full.", "Natural stone varies in colour, veining and size; slabs are sold as selected."]),
+    signatures: ["Prepared by", "Customer"],
+  };
+}
+
+/** Delivery note: what left, from where, who took it. No prices (gate pass for the yard). */
+async function dn(ctx: Ctx, id: string): Promise<PrintDoc> {
+  assertCan(ctx, "delivery.view");
+  const d = (await prisma.deliveryNote.findUnique({ where: { id }, include: { taxInvoice: true, salesOrder: true, customer: true, items: { orderBy: { lineNo: "asc" }, include: { product: true, balance: { include: { lot: true, block: true, slab: true, warehouse: true } } } } } })) ?? notFound("Delivery note");
+  return {
+    title: "Delivery Note",
+    number: d.number,
+    fileName: d.number,
+    facts: [["Date", fmtDate(d.date)], ["Tax invoice", d.taxInvoice.number], ["Sales order", d.salesOrder.number]],
+    party: { label: "Deliver to", lines: nonEmpty([d.customerName, d.customer.address, d.customer.mobile]) },
+    extra: { label: "Transport", lines: nonEmpty([d.vehicleNo && `Vehicle ${d.vehicleNo}`, d.driverName && `Driver ${d.driverName}`, d.receivedBy && `Received by ${d.receivedBy}`]) },
+    columns: [
+      { key: "n", label: "#", width: 0.4 },
+      { key: "item", label: "Product", width: 3 },
+      { key: "stock", label: "Lot / block / slab", width: 2.4 },
+      { key: "sqm", label: "SQM", align: "right", width: 1.2 },
+    ],
+    rows: d.items.map((i) => ({
+      n: String(i.lineNo),
+      item: i.product.name,
+      stock: `${i.balance.slab ? `Slab ${i.balance.slab.slabNo}` : `Lot ${i.balance.lot.lotNo}${i.balance.block ? ` / block ${i.balance.block.blockNo}` : ""}`}\n${i.balance.warehouse.name}`,
+      sqm: fmtSqm(D(i.sqm)),
+    })),
+    totals: [["Total SQM", fmtSqm(d.items.reduce((a, i) => a.plus(i.sqm), D(0)))]],
+    notes: nonEmpty([d.remarks, "Goods received in good condition. Natural stone varies in colour, veining and size."]),
+    signatures: ["Released by (store)", "Received by (customer)"],
+  };
+}
+
+/** Tax credit note (spec §3.3.8): original invoice no./date, customer TRN, reason, lines with VAT adjustment. */
+async function cn(ctx: Ctx, id: string): Promise<PrintDoc> {
+  assertCan(ctx, "sales.view");
+  const c = (await prisma.creditNote.findUnique({ where: { id }, include: { taxInvoice: true, items: { orderBy: { lineNo: "asc" }, include: { taxInvoiceItem: { include: { product: true, taxCode: true } } } } } })) ?? notFound("Credit note");
+  if (c.status !== "POSTED" || !c.number) throw new AppError("VALIDATION", "Only a posted credit note can be printed");
+  const money = (v: { toString(): string }) => fmtMoney(D(v.toString()));
+  return {
+    title: "Tax Credit Note",
+    number: c.number,
+    fileName: c.number,
+    facts: [["Date", fmtDate(c.date)], ["Original invoice", c.taxInvoice.number], ["Invoice date", fmtDate(c.taxInvoice.date)]],
+    party: { label: "Customer", lines: nonEmpty([c.customerName, c.taxInvoice.customerAddress, c.customerTrn && `TRN ${c.customerTrn}`]) },
+    extra: { label: "Supplier", lines: nonEmpty([c.taxInvoice.companyName, c.taxInvoice.companyAddress, c.taxInvoice.companyTrn && `TRN ${c.taxInvoice.companyTrn}`]) },
+    columns: [
+      { key: "n", label: "#", width: 0.4 },
+      { key: "item", label: "Description", width: 3 },
+      { key: "sqm", label: "SQM", align: "right", width: 1 },
+      { key: "net", label: "Taxable amount", align: "right", width: 1.3 },
+      { key: "rate", label: "VAT %", align: "right", width: 0.7 },
+      { key: "vat", label: "VAT (AED)", align: "right", width: 1.1 },
+      { key: "total", label: "Total (AED)", align: "right", width: 1.3 },
+    ],
+    rows: c.items.map((i) => ({
+      n: String(i.lineNo),
+      item: i.taxInvoiceItem.product.name,
+      sqm: D(i.sqm).gt(0) ? fmtSqm(D(i.sqm)) : "",
+      net: money(i.netAmount),
+      rate: i.taxInvoiceItem.taxCode.type === "SR" ? D(i.taxInvoiceItem.taxCode.rate).toString() : `0 (${i.taxInvoiceItem.taxCode.code})`,
+      vat: money(i.vatAmount),
+      total: money(i.grossAmount),
+    })),
+    totals: [["Total excl. VAT", AED(c.netTotal)], ["VAT adjustment", AED(c.vatTotal)], ["Total credited", AED(c.total)]],
+    notes: nonEmpty([`Reason: ${c.reason}`, D(c.toAdvance).gt(0) ? `${AED(c.toAdvance)} is held as credit for the customer.` : null]),
+    signatures: ["Authorised by", "Customer"],
   };
 }
 
@@ -302,6 +421,12 @@ export async function buildPrintDoc(ctx: Ctx, type: string, id: string, q: URLSe
       return so(ctx, id);
     case "pi":
       return pi(ctx, id);
+    case "ti":
+      return ti(ctx, id);
+    case "dn":
+      return dn(ctx, id);
+    case "cn":
+      return cn(ctx, id);
     case "receipt":
       return receipt(ctx, id);
     case "pv":

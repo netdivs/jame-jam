@@ -2,7 +2,8 @@ import { notFound } from "next/navigation";
 import { Card, LinkButton, PageHeader } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { D, prisma } from "@/server/core";
-import { isPaidAndVerified } from "@/server/purchase/orders";
+import { isPaidAndVerified, needsPaymentBeforeReceipt } from "@/server/purchase/orders";
+import { getSetting } from "@/server/settings";
 import { fmtMoney, todayIso } from "@/lib/format";
 import { GrnForm } from "./grn-form";
 
@@ -20,6 +21,7 @@ export default async function ReceivePage({ params }: { params: Promise<{ id: st
 
   let blocked = "";
   if (!["APPROVED", "PARTIALLY_RECEIVED"].includes(po.status)) blocked = "This PO is not open for receiving.";
+  else if (!needsPaymentBeforeReceipt(po, await getSetting("purchase.receiveBeforePayment"))) blocked = "";
   else if (D(po.paidAmount).lt(po.total)) blocked = `Blocked: the supplier is paid AED ${fmtMoney(po.paidAmount)} of AED ${fmtMoney(po.total)}. Goods are received only after 100% payment.`;
   else if (!isPaidAndVerified(po)) blocked = "Blocked: the 100% payment has not been verified yet.";
 

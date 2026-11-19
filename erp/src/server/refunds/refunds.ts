@@ -12,13 +12,14 @@
 //    while the target PO still holds the moved amount as an advance and its payment has not been verified.
 //  - Lock order: PI → customer → refund / receipt, and PO (lower id first) → refund / transfer.
 import { z } from "zod";
-import { AppError, Ctx, D, Dec, Tx, assertCan, audit, inTx, nextDocNumber, prisma, round2, toDateOnly, today } from "../core";
+import { AppError, Ctx, D, Dec, Tx, assertCan, audit, can, inTx, nextDocNumber, prisma, round2, toDateOnly, today } from "../core";
 import { postJournal } from "../accounting/gl";
 import { cashAccountFor } from "../accounting/banks";
 import { LIVE, lockPo, paymentStatusOf } from "../purchase/orders";
 import { settlePoInvoices } from "../purchase/payments";
 import { OPEN_RECEIVED } from "../receipts/cheques";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
+import { getSetting } from "../settings";
 
 const base = {
   date: dateStr,
@@ -80,6 +81,10 @@ export async function recordCustomerRefund(ctx: Ctx, raw: unknown) {
   if (date > today()) throw new AppError("VALIDATION", "A refund cannot be dated in the future", { fields: { date: "Not after today" } });
 
   return inTx(async (tx) => {
+    const cashLimit = await getSetting("refunds.cashLimit", tx);
+    if (input.mode === "CASH" && cashLimit !== null && amount.gt(cashLimit) && !can(ctx, "refunds.overLimit")) {
+      throw new AppError("FORBIDDEN", `Cash refunds above AED ${D(cashLimit).toFixed(2)} need the Owner's permission — pay by bank, or ask a user with "refund above the cash limit"`, { fields: { amount: `Cash limit AED ${D(cashLimit).toFixed(2)}` } });
+    }
     let customerId = input.customerId;
     let pi: Awaited<ReturnType<typeof lockPi>> | null = null;
     if (input.proformaInvoiceId) {

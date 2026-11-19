@@ -70,7 +70,7 @@ test("sales order and proforma flow", async ({ page }, info) => {
     soUrl = new URL(page.url()).pathname;
     await expect(page.getByText("Open (reserved)").first()).toBeVisible();
     await expect(page.getByText(/Reserved \d/).locator("visible=true").first()).toBeVisible();
-    await expect(page.getByRole("link", { name: "Edit" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Edit", exact: true })).toBeVisible();
     await expect(page.getByText("Cancel this sales order")).toHaveCount(0); // sales cannot cancel
     await shot(page, info, "02-so-detail");
   });
@@ -91,7 +91,7 @@ test("sales order and proforma flow", async ({ page }, info) => {
     await expect(page.getByRole("button", { name: "Close proforma" })).toHaveCount(0);
     await shot(page, info, "03-pi-detail");
     await page.goto(soUrl);
-    await expect(page.getByRole("link", { name: "Edit" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Edit", exact: true })).toHaveCount(0);
     await expect(page.getByText(/Quoted on proforma PI-/)).toBeVisible();
   });
 
@@ -126,7 +126,7 @@ test("sales order and proforma flow", async ({ page }, info) => {
     await expect(page.getByRole("button", { name: "Close proforma" })).toHaveCount(0);
     await loginAs(page, "sales");
     await page.goto(soUrl);
-    await page.getByRole("link", { name: "Edit" }).click();
+    await page.getByRole("link", { name: "Edit", exact: true }).click();
     await expect(page.getByLabel("Line 1 SQM")).toHaveValue("81.72");
     await page.getByLabel("Line 1 SQM").fill("50");
     await page.getByRole("button", { name: "Save changes" }).click();

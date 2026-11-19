@@ -36,12 +36,12 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 |---|---|---|---|---|---|---|---|
 | T5-01 | Schema: SalesOrder(+Item), ProformaInvoice(+Item), TaxInvoice(+Item); `salesOrderId` NOT NULL on PI/TI; customer snapshot; price mode | High | Step 4 DONE | DONE (SO + PI; TI schema with T5-06) | C (schema owner) | Additive migration; no drift | migration |
 | T5-02 | SO service: create/edit/cancel with reservation via `reserveStock`/`releaseReservation`; status Open → Partially Invoiced → Invoiced → Delivered → Closed/Cancelled | High | T5-01 | DONE (expiry waits for T5-03/C2) | O | D1: reserve on save; edit adjusts; cancel releases; no double reservation | H R P C S A |
-| T5-03 | SO reservation expiry job + extension (`so.extendReservation`) | High | T5-02, **C2** | BLOCKED (C2) | O | Auto-release after validity; extension audited | H R P A |
+| T5-03 | SO reservation expiry job + extension (`so.extendReservation`) | High | T5-02, **C2** | BUILT on the C2 proposal behind `sales.reservationAutoExpire` (19 Nov 2026, TD-050); sign-off BLOCKED (C2) | O | Auto-release after validity; extension audited | H R P A |
 | T5-04 | VAT engine: inclusive/exclusive line maths per spec §3.3.4, discounts, no round-off | High | **C4** | BUILT as C4 proposal; sign-off BLOCKED (C4) | C | 81.72 × 100.00 incl → 8,172.00 / 389.14 / 7,782.86; Σnet + ΣVAT = total | H R (property tests) |
 | T5-05 | PI service: create from SO only; validity from `piValidityDays`; expire job; renew (`pi.renew`); close/cancel; no GL | High | T5-02 | DONE (job wiring waits for TJ-01) | O | R1 | H R P A |
-| T5-06 | TI service: from SO (or PI); FTA fields; post Dr AR / Cr SALES, Cr VAT_OUTPUT; reservation moves with invoiced qty; partial invoicing | High | T5-02, T5-04 | BLOCKED (C4) | O | D1, D4; backend rejects TI without SO | H R P G A |
-| T5-07 | Customer advance auto knock-off on TI (from PI-referenced receipts) | Med | T6-01 | PLANNED | O | Advance applied; payment status updated | H G |
-| T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | PARTIAL: SO + PI screens done; TI screens with T5-06 | K | Mobile usable; mirrors backend errors | HTTP/E2E |
+| T5-06 | TI service: from SO (or PI); FTA fields; post Dr AR / Cr SALES, Cr VAT_OUTPUT; reservation moves with invoiced qty; partial invoicing | High | T5-02, T5-04 | BUILT behind `features.salesInvoicing` (19 Nov 2026, TD-045); sign-off BLOCKED (C4) | O | D1, D4; backend rejects TI without SO | H R P G A |
+| T5-07 | Customer advance auto knock-off on TI (from PI-referenced receipts) | Med | T6-01 | BUILT with T5-06 (TD-045) | O | Advance applied; payment status updated | H G |
+| T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | DONE (19 Nov 2026): SO, PI, TI screens; TI behind the module switch | K | Mobile usable; mirrors backend errors | HTTP/E2E |
 | T5-09 | `taxCode.change` permission + reason for non-SR codes on sales (and purchase) lines (F12) | Med | T5-01 | DONE (sales TD-019, purchase TD-022) | O | Spec §3.3.5; audited | R P A |
 | T5-10 | Sales permissions in `rbac.ts` (spec §5 matrix) | High | — | DONE | C | Matrix tests per role | P |
 
@@ -49,18 +49,18 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | PARTIAL: receipts and advances (with PI link) done; allocation to TIs waits for T5-06 (C4) | O | Payment status = total − allocations | H R P G A |
+| T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | DONE (19 Nov 2026): receipts and advances; PI advances knocked off on the TI; free advance applied by a user; receipt against a TI (TD-045) | O | Payment status = total − allocations | H R P G A |
 | T6-02 | PDC received/issued with status history and GL (PDC_RECEIVABLE/PAYABLE) | High | T6-01, T8-03 | DONE (received; issued against a PO, a landed cost bill or an opening supplier invoice) | O | R5; PDC counts as payment only when cleared | H R P G A |
-| T6-03 | DN: only when TI fully paid (BD-15); consume reservation, Dr COGS / Cr INVENTORY; partial dispatch | High | T6-01 | PLANNED | O | R10 | H R P G S A |
+| T6-03 | DN: only when TI fully paid (BD-15); consume reservation, Dr COGS / Cr INVENTORY; partial dispatch | High | T6-01 | BUILT behind `features.salesInvoicing` (19 Nov 2026, TD-048) | O | R10 | H R P G S A |
 | T6-04 | PDC due reminders job + dashboard widget | Med | T6-02, TJ-01 | DONE (dashboard widget + daily pdc-due job; no email/SMS by scope) | O/K | Reminder N days ahead (`pdcReminderDays`) | H |
-| T6-05 | Receipts/PDC/DN UI incl. mobile DN confirmation | High | T6-01…03 | PLANNED | K | — | E2E |
+| T6-05 | Receipts/PDC/DN UI incl. mobile DN confirmation | High | T6-01…03 | DONE for DN (19 Nov 2026): DN on the TI page, list, detail, PDF; mobile layout checked by E2E | K | — | E2E |
 
 ## Step 7 — Returns & Credit Notes
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T7-01 | Return request → Owner/Manager approval → physical receipt (condition) → stock in | High | T6-03 | PLANNED | O | R4; stock only for approved AND received SQM | H R P S A |
-| T7-02 | Credit notes: return-based and adjustment-based (no stock movement) | High | T7-01, **C7** | BLOCKED (C7) | O | R2 | H R P G S A |
+| T7-01 | Return request → Owner/Manager approval → physical receipt (condition) → stock in | High | T6-03 | BUILT behind `features.salesInvoicing` (19 Nov 2026, TD-049) | O | R4; stock only for approved AND received SQM | H R P S A |
+| T7-02 | Credit notes: return-based and adjustment-based (no stock movement) | High | T7-01, **C7** | BUILT on the C7 proposal behind the switch (19 Nov 2026, TD-049); sign-off BLOCKED (C7) | O | R2 | H R P G S A |
 
 ## Step 8 — Accounts
 
@@ -69,7 +69,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T8-01 | Customer and supplier ledgers and statements | High | T6-01 | DONE (18 Nov 2026, TD-030; statement PDF/Excel waits for TX-01/02 — browser print meanwhile; tax invoice lines join with T5-06) | O | Ledger totals = AR/AP control (spec §11.3) | G |
 | T8-02 | Manual journal voucher (permission, balanced, period lock) | Med | — | DONE | O | Uses `postJournal` | H R P G A |
 | T8-03 | Bank account master; payments choose bank account (replaces single BANK_MAIN, F9) | High | — | DONE | C (schema) | Existing BANK_MAIN mapped to first bank account | H G |
-| T8-04 | Petty cash (top-up, expense with category, optional input VAT, daily cash report) | Med | T8-03 | DONE (18 Nov 2026, TD-028; receipt attachment waits for file storage) | O | — | H R P G |
+| T8-04 | Petty cash (top-up, expense with category, optional input VAT, daily cash report) | Med | T8-03 | DONE (18 Nov 2026, TD-028; receipt attachment 20 Nov 2026, TD-056) | O | — | H R P G |
 | T8-05 | Bank reconciliation (manual/CSV statement lines, matching) | Med | T8-03 | DONE (18 Nov 2026, TD-029; Excel import waits for TX-02) | O | — | H G |
 | T8-06 | Refund vouchers (customer and supplier) | Med | T8-03 | DONE (18 Nov 2026, TD-027) | O | Unblocks T4-15 | H R P G |
 | T8-07 | Financial reports: trial balance, P&L, balance sheet | Med | — | DONE | O | Ties to journals | G |
@@ -78,9 +78,9 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T9-01 | VAT summary (FTA boxes), output/input registers with drill-down, adjustments | High | T5-06, T7-02 | PLANNED | O | R7: reconciles to VAT GL | G |
-| T9-02 | Accountant export pack (Excel) | High | T9-01, TX-02 | PLANNED | O | Opens in Excel; matches screen | H |
-| T9-03 | The 16 reports of spec §4 with Excel/PDF export | Med | various | PLANNED | O/K | Filters per spec | H |
+| T9-01 | VAT summary (FTA boxes), output/input registers with drill-down, adjustments | High | T5-06, T7-02 | DONE (19 Nov 2026, TD-051): `/accounts/vat`; sales side live once tax invoicing is switched on | O | R7: reconciles to VAT GL | G |
+| T9-02 | Accountant export pack (Excel) | High | T9-01, TX-02 | DONE (19 Nov 2026, TD-051): Excel `vat-pack` | O | Opens in Excel; matches screen | H |
+| T9-03 | The 16 reports of spec §4 with Excel/PDF export | Med | various | DONE (19 Nov 2026, TD-052): `/reports` hub; new purchase, sales, profit per invoice, bank, expense, lot stock/valuation, reservations, advances; Excel + print | O/K | Filters per spec | H |
 
 ## Step 10 — CRM
 
@@ -94,9 +94,9 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 |---|---|---|---|---|---|---|---|
 | T11-01 | Opening AR/AP (invoice-wise), bank/cash/PDC balances, opening trial balance | High | T8-01, T8-03 | DONE (19 Nov 2026, TD-033; bulk Excel import is T11-02) | O | R8 | H G |
 | T11-02 | Excel import templates with validation, error report and dry run | Med | TX-02 | DONE (19 Nov 2026, TD-037): customers, suppliers, products, opening balances, opening stock | O | — | H R |
-| T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | PARTIAL (19 Nov 2026): purchases, landed costs, SOs/PIs (active/expired/renewed), receipts, PDCs (pending/cleared/bounced/replaced, issued), petty cash, bank statement lines, CRM. Tax invoices, DNs, credit notes and a VAT period wait for C4/C7 | O | Demo runs complete workflows | H |
+| T11-03 | Full demo data set (spec §10) | Med | Steps 5–10 | DONE (19 Nov 2026, TD-053): purchases, landed costs, SOs/PIs, receipts, PDCs, petty cash, bank lines, CRM, tax invoices, delivery, return + credit note, pending adjustment CN | O | Demo runs complete workflows | H |
 | T11-04 | Mobile dashboard (spec §6) | Med | Steps 5–6 | DONE (19 Nov 2026): figures by permission — open SOs, orders this month, active proformas, bank, cash & petty cash, receivables, customer advances, payables, cheques in hand; plus follow-ups due, cheques due, stock. Invoiced sales join with T5-06 (C4) | K | — | E2E |
-| T11-05 | PDF documents (PO, GRN, SO, PI, TI, DN, CN, CR, RV, PV, PDC, statements) | High | TX-01 | PARTIAL (19 Nov 2026): PO, GRN, SO, PI, CR/RV, PV, refund, PDC, petty cash voucher, statements. TI, DN, CN wait for C4/C7 | O/K | Snapshot company details | H |
+| T11-05 | PDF documents (PO, GRN, SO, PI, TI, DN, CN, CR, RV, PV, PDC, statements) | High | TX-01 | DONE (19 Nov 2026): PO, GRN, SO, PI, TI, DN, CN, CR/RV, PV, refund, PDC, petty cash voucher, statements. TI/DN/CN follow the C4/C7 proposals (module switch) | O/K | Snapshot company details | H |
 | T11-06 | UAT, client demo, production readiness sign-off | High | all | PLANNED | user | [production-readiness.md](docs/engineering/production-readiness.md) all green | — |
 
 ## Cross-cutting
@@ -106,11 +106,14 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T1-01 | Screen + service to manage per-user permission grants/revokes (F17) | Low | — | DONE (19 Nov 2026) | O/K | `users.manage`; audited | P A |
 | TS-01 | Automated daily PostgreSQL backups with off-server copy and a tested restore | **Critical** | user approval (server) | BLOCKED (approval) | C + user | Restore drill documented | drill |
 | TS-02 | Security hardening: login rate limit, audit failed logins/logout, IP in audit log, security headers, non-root container | High | — | DONE (18 Nov 2026, TD-032; non-root image to be confirmed at the release build) | O | [security-review.md](docs/engineering/security-review.md) items closed | R P |
-| TS-03 | Run the app in Asia/Dubai business time (`TZ=Asia/Dubai` on the app container, or explicit timezone in `today()`) (F18) | High | user approval (prod config) | CODE READY: `TZ=Asia/Dubai` on app and jobs in docker-compose.prod.yml; takes effect at the release (approval) | C | Dates after midnight Dubai are correct; test with a fixed clock | H |
+| TS-03 | Run the app in Asia/Dubai business time (`TZ=Asia/Dubai` on the app container, or explicit timezone in `today()`) (F18) | High | user approval (prod config) | DONE (deployed 19 Nov 2026 with 90e730d): `TZ=Asia/Dubai` on app and jobs in docker-compose.prod.yml | C | Dates after midnight Dubai are correct; test with a fixed clock | H |
 | TS-04 | Base-only seed for production (no demo users/stock, password required, role reset in one transaction) (F19, F20) | Med | — | DONE (18 Nov 2026) | O | `npm run db:seed:base`; documented in deployment.md | H |
 | TQ-01 | CI pipeline (typecheck, lint, test with disposable Postgres, build, drift check) | High | — | DONE (written 18 Nov 2026: `.github/workflows/ci.yml` with Vitest + drift + build + audit + Playwright jobs; first run happens on the first push) | C | Runs on every push/PR | — |
 | TS-05 | Dependency upgrades for `npm audit --omit=dev` highs: zod 3 → 4 (breaking API), Next.js patch that bundles postcss ≥ 8.5.23, Prisma release without vulnerable deepmerge-ts; then make the CI audit step blocking | High | — | DONE (19 Nov 2026, TD-038): zod 4.6.7; postcss and deepmerge-ts via npm overrides (no upstream fix in Next 15 / Prisma 6 yet); CI audit blocking | C | `npm audit --omit=dev --audit-level=high` clean; all gates green | H E2E |
+| TP-01 | Business policy settings registry + Settings → System page (Phase 0) | High | — | DONE (19 Nov 2026, TD-039) | C | Defaults keep current behaviour; audited; Owner only | H R P A |
+| TP-02 | Policy settings Phase 1: credit purchases, invoice-above-PO tolerance, category allocation basis, bank charges as expense, cash refund limit | High | TP-01 | DONE (19 Nov 2026, TD-040…044) | C | Each rule off by default; tests per rule | H R P G A |
+| TP-03 | Phase 2: Tax Invoice, DN, Returns, CN, reservation expiry, VAT reports behind feature switch `features.salesInvoicing` (off in production), pending rules C2/C4/C7 as settings defaulting to the proposals | High | TP-01 | DONE (19 Nov 2026): TI, knock-off, DN, returns, credit notes, reservation expiry, VAT return + pack; all behind settings, off by default | C | Switch off = no change; docs say "proposal, client approval pending" | per task |
 | TJ-01 | Scheduled job runner (PI expiry, SO expiry, PDC/CRM reminders) | High | — | DONE (jobs service in docker-compose.prod.yml is applied at the release) | C | Idempotent; runs as `systemCtx`; logged | H |
-| TX-01 | Choose PDF library (ADR) | Med | — | PLANNED | C | Entry in DECISIONS.md | — |
-| TX-02 | Choose Excel library (ADR) | Med | — | PLANNED | C | Entry in DECISIONS.md | — |
+| TX-01 | Choose PDF library (ADR) | Med | — | DONE (19 Nov 2026, TD-035: @react-pdf/renderer) | C | Entry in DECISIONS.md | — |
+| TX-02 | Choose Excel library (ADR) | Med | — | DONE (19 Nov 2026, TD-036: exceljs) | C | Entry in DECISIONS.md | — |
 | TA-01 | Configure an OpenCode model provider so backend tasks can be delegated | Low | user | BLOCKED (user) | user | `opencode auth list` shows a provider | — |

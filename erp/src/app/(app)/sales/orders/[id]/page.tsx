@@ -6,8 +6,11 @@ import { requirePermission } from "@/server/auth";
 import { D, ZERO, prisma } from "@/server/core";
 import { PI_OPEN } from "@/server/sales/proformas";
 import { fmtAED, fmtDate, fmtMoney, fmtSqm, titleCase, todayIso } from "@/lib/format";
-import { cancelSoAction, createPiAction } from "../../actions";
-import { PiStatus, SoStatus, priceModeLabel } from "../../shared";
+import { cancelSoAction, createPiAction, createTiAction, extendReservationAction } from "../../actions";
+import { getSetting } from "@/server/settings";
+import { reservationValidUntil } from "@/server/sales/reservations";
+import { salesInvoicingEnabled } from "@/server/sales/invoices";
+import { PiStatus, SoStatus, TiPayStatus, priceModeLabel } from "../../shared";
 
 export default async function SoDetail({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("sales.view");
@@ -18,9 +21,14 @@ export default async function SoDetail({ params }: { params: Promise<{ id: strin
     include: {
       items: { orderBy: { lineNo: "asc" }, include: { product: true, taxCode: true, balance: { include: { lot: true, block: true, slab: true, warehouse: true } } } },
       proformas: { orderBy: { createdAt: "desc" }, include: { items: true } },
+      taxInvoices: { orderBy: { createdAt: "desc" } },
     },
   });
   if (!so) notFound();
+  const invoicing = await salesInvoicingEnabled();
+  const autoExpire = await getSetting("sales.reservationAutoExpire");
+  const days = (await prisma.companySetting.findUniqueOrThrow({ where: { id: 1 } })).soReservationDays;
+  const validUntil = reservationValidUntil(so, days);
   const reservations = await prisma.stockReservation.findMany({ where: { refType: "SALES_ORDER", refId: id } });
   const resById = new Map(reservations.map((r) => [r.id, r]));
 
@@ -37,7 +45,7 @@ export default async function SoDetail({ params }: { params: Promise<{ id: strin
 
   let next = "";
   if (so.status === "OPEN" && !livePi) next = "Stock is reserved for this customer. Issue a proforma invoice to quote it.";
-  else if (so.status === "OPEN" && livePi) next = `Quoted on proforma ${livePi.number}. Tax invoices, receipts and delivery come in the next tasks (T5-06, Step 6).`;
+  else if (so.status === "OPEN" && livePi) next = `Quoted on proforma ${livePi.number}. ${invoicing ? "Convert it to a tax invoice from the proforma page, or issue one here." : "Tax invoicing is switched off until the client confirms the VAT method."}`;
   else if (so.status === "CANCELLED") next = `Cancelled: “${so.cancelReason ?? ""}”. Its reservations were released.`;
 
   return (
@@ -184,6 +192,65 @@ export default async function SoDetail({ params }: { params: Promise<{ id: strin
               <SubmitButton pendingText="Issuing…">Issue proforma invoice</SubmitButton>
             </div>
           </ActionForm>
+        </Card>
+      )}
+
+      {(so.taxInvoices.length > 0 || invoicing) && (
+        <Card title="Tax invoices" className="mb-5" pad={false}>
+          {so.taxInvoices.length === 0 ? (
+            <Empty>No tax invoice yet.</Empty>
+          ) : (
+            <Table>
+              <tbody>
+                {so.taxInvoices.map((ti) => (
+                  <tr key={ti.id}>
+                    <td className="whitespace-nowrap">
+                      <Link href={`/sales/invoices/${ti.id}`} className="font-medium text-primary hover:underline">{ti.number}</Link>
+                    </td>
+                    <td className="whitespace-nowrap">{fmtDate(ti.date)}</td>
+                    <td><TiPayStatus s={ti.paymentStatus} /></td>
+                    <td className="num">{fmtMoney(ti.total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Card>
+      )}
+
+      {invoicing && canQuote && has("sales.edit") && (
+        <Card title="Issue a tax invoice" className="mb-5">
+          <ActionForm action={createTiAction.bind(null, { soId: id })} className="grid gap-4 sm:grid-cols-2">
+            <FInput label="Invoice date" name="date" type="date" defaultValue={todayIso()} required />
+            <p className="self-end text-sm text-muted">Prices and tax codes come from this SO. Money received on its proformas is applied automatically. To invoice a quoted proforma, convert it from the proforma page.</p>
+            <fieldset className="sm:col-span-2">
+              <legend className="mb-2 text-sm font-medium">SQM to invoice (defaults to everything not yet quoted or invoiced)</legend>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {openToQuote.map(({ item, open }) => (
+                  <FInput key={item.id} id={`ti-${item.id}`} label={`Line ${item.lineNo} — ${item.product.name}`} name={`sqm:${item.id}`} inputMode="decimal" defaultValue={open.gt(0) ? open.toString() : "0"} hint={`${fmtSqm(open.gt(0) ? open : 0)} SQM open`} />
+                ))}
+              </div>
+            </fieldset>
+            <FTextarea id="ti-notes" label="Notes" name="notes" rows={2} />
+            <div className="sm:col-span-2">
+              <SubmitButton pendingText="Issuing…">Issue tax invoice</SubmitButton>
+            </div>
+          </ActionForm>
+        </Card>
+      )}
+
+      {so.status === "OPEN" && autoExpire && (
+        <Card title="Reservation" className="mb-5">
+          <p className={`text-sm ${validUntil < new Date() ? "font-medium text-danger" : ""}`}>
+            Stock is held until {fmtDate(validUntil)}{so.reservationExpiresAt ? " (extended)" : ""}. After that the nightly job releases it unless the customer has paid an advance on a proforma.
+          </p>
+          {has("sales.extendReservation") && (
+            <ActionForm action={extendReservationAction.bind(null, id)} className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-end">
+              <FInput label="Hold until" name="until" type="date" required defaultValue={todayIso()} />
+              <FInput id="ext-reason" label="Reason" name="reason" placeholder="e.g. customer confirmed by phone" />
+              <SubmitButton variant="secondary" pendingText="Saving…">Extend reservation</SubmitButton>
+            </ActionForm>
+          )}
         </Card>
       )}
 

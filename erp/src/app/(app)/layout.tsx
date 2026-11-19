@@ -17,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const settings = await prisma.companySetting.findUnique({ where: { id: 1 } });
 
   const nav: NavGroup[] = [
-    { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }] },
+    { label: "Overview", items: [{ href: "/", label: "Dashboard", icon: "dashboard" }, { href: "/reports", label: "Reports", icon: "reports" }] },
     {
       label: "Inventory",
       items: has("inventory.view")
@@ -36,6 +36,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           ? [
               { href: "/sales/orders", label: "Sales orders", icon: "salesOrders" as const },
               { href: "/sales/proformas", label: "Proforma invoices", icon: "proformas" as const },
+              { href: "/sales/invoices", label: "Tax invoices", icon: "proformas" as const },
+              ...(has("delivery.view") ? [{ href: "/sales/deliveries", label: "Delivery notes", icon: "proformas" as const }] : []),
+              { href: "/sales/returns", label: "Sales returns", icon: "proformas" as const },
+              { href: "/sales/credit-notes", label: "Credit notes", icon: "proformas" as const },
             ]
           : []),
         ...(has("receipts.view") ? [{ href: "/receipts", label: "Customer receipts", icon: "receipts" as const }] : []),
@@ -99,6 +103,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               { href: "/accounts/trial-balance", label: "Trial balance", icon: "reports" as const },
               { href: "/accounts/profit-loss", label: "Profit & loss", icon: "reports" as const },
               { href: "/accounts/balance-sheet", label: "Balance sheet", icon: "reports" as const },
+              { href: "/accounts/vat", label: "VAT return", icon: "reports" as const },
             ]
           : []),
         ...(has("accounts.view") ? [{ href: "/accounts/periods", label: "Periods", icon: "periods" as const }] : []),
@@ -108,7 +113,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     {
       label: "Administration",
       items: [
-        ...(has("settings.view") ? [{ href: "/settings/company", label: "Company settings", icon: "company" as const }] : []),
+        ...(has("settings.view") ? [{ href: "/settings/company", label: "Company settings", icon: "company" as const }, { href: "/settings/system", label: "System settings", icon: "company" as const }] : []),
         ...(has("settings.view") ? [{ href: "/settings/tax-codes", label: "Tax codes", icon: "tax" as const }] : []),
         ...(has("users.manage") ? [{ href: "/settings/users", label: "Users", icon: "users" as const }] : []),
         ...(has("users.manage") ? [{ href: "/settings/roles", label: "Roles & permissions", icon: "roles" as const }] : []),

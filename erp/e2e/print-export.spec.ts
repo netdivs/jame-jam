@@ -30,6 +30,22 @@ test("PDF and Excel buttons return real files; permissions apply", async ({ page
   expect(xls.headers()["content-disposition"]).toMatch(/trial-balance-.*\.xlsx/);
   expect((await xls.body()).subarray(0, 2).toString()).toBe("PK"); // xlsx is a zip
 
+  await page.goto("/accounts/vat");
+  await expect(page.getByRole("heading", { name: "VAT return" })).toBeVisible();
+  await expect(page.getByText(/Ties to the VAT accounts|Does not tie/)).toBeVisible();
+  const pack = await page.request.get((await page.getByRole("link", { name: "Accountant pack (Excel)" }).getAttribute("href"))!);
+  expect(pack.status()).toBe(200);
+  expect(pack.headers()["content-disposition"]).toMatch(/vat-pack-.*\.xlsx/);
+
+  await page.goto("/reports");
+  await page.getByRole("link", { name: "Purchase report" }).click();
+  await expect(page.getByRole("heading", { name: "Purchase report", level: 1 })).toBeVisible();
+  await page.getByLabel("From").fill("2026-01-01");
+  await page.getByRole("button", { name: "Show" }).click();
+  await expect(page.getByRole("cell", { name: /^PUR-/ }).first()).toBeVisible();
+  const rep = await page.request.get((await page.getByRole("link", { name: "Excel", exact: true }).getAttribute("href"))!);
+  expect(rep.headers()["content-disposition"]).toMatch(/purchase-report-.*\.xlsx/);
+
   await page.goto("/accounts/ledgers?type=customer");
   await page.getByRole("link", { name: /\(demo\)$/ }).first().click();
   const st = await page.request.get((await page.getByRole("link", { name: "PDF", exact: true }).getAttribute("href"))!);

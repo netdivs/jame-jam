@@ -4,6 +4,7 @@ import { requireUser } from "@/server/auth";
 import { D, prisma, sum, today } from "@/server/core";
 import { chequesDue } from "@/server/receipts/cheques";
 import { followUpsDue } from "@/server/crm/crm";
+import { reservationsExpiring } from "@/server/sales/reservations";
 import { partyBalances } from "@/server/accounting/ledgers";
 import { cashAccounts } from "@/server/accounting/opening";
 import { OPEN_RECEIVED } from "@/server/receipts/cheques";
@@ -52,6 +53,7 @@ export default async function Dashboard() {
       <Glance can={can} />
       {can("crm.view") && <FollowUpsDue userId={user.ctx.userId!} />}
       {can("receipts.view") && <PdcDue issued={can("purchase.view")} />}
+      {can("sales.view") && <ReservationsExpiring />}
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Available stock" value={`${fmtSqm(onHand.minus(reserved))} SQM`} hint={`${fmtSqm(onHand)} physical · ${fmtSqm(reserved)} reserved`} />
         <Stat label="Slabs in stock" value={count("AVAILABLE") + count("RESERVED") + count("PARTIALLY_SOLD")} hint={`${count("RESERVED")} reserved · ${count("PARTIALLY_SOLD")} partly sold`} />
@@ -139,6 +141,27 @@ async function PdcDue({ issued }: { issued: boolean }) {
   );
 }
 
+
+/** Open sales orders whose stock reservation ends soon (T5-03; only when auto-expiry is on). */
+async function ReservationsExpiring() {
+  const rows = await reservationsExpiring(today());
+  if (rows.length === 0) return null;
+  return (
+    <Card title={`Reservations ending soon (${rows.length})`} actions={<Link href="/sales/orders" className="text-xs text-primary">Sales orders</Link>} className="mb-5" pad={false}>
+      <Table>
+        <tbody>
+          {rows.slice(0, 6).map((r) => (
+            <tr key={r.id}>
+              <td><Link href={`/sales/orders/${r.id}`} className="font-medium text-primary hover:underline">{r.number}</Link><span className="block text-xs text-muted">{r.customerName}</span></td>
+              <td className="whitespace-nowrap">until {fmtDate(r.validUntil)}</td>
+              <td className="num whitespace-nowrap">{fmtMoney(r.total)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Card>
+  );
+}
 
 /** The user's CRM follow-ups due today or overdue (spec §3.6 reminders, §6 "follow-ups due"). */
 async function FollowUpsDue({ userId }: { userId: string }) {

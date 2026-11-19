@@ -30,6 +30,11 @@ describe("demo data (spec §10)", () => {
     expect(await prisma.opportunity.count({ where: { stage: "WON", salesOrder: { isNot: null } } })).toBeGreaterThan(0);
     expect(await prisma.lead.count({ where: { status: "CONVERTED" } })).toBeGreaterThan(0);
     expect(await prisma.crmFollowUp.count({ where: { status: "OPEN" } })).toBeGreaterThan(0);
+    // Invoicing cycle (C4/C7 proposals): paid + delivered + returned/credited, and an unpaid one with a pending CN.
+    const demoTi = await prisma.taxInvoice.findMany({ where: { salesOrder: { notes: { contains: "(demo)" } } }, include: { deliveryNotes: true, returnRequests: true, creditNotes: true } });
+    expect(demoTi.some((t) => t.paymentStatus === "PAID" && t.deliveryNotes.length > 0 && t.returnRequests.some((r) => r.status === "CREDITED")), "a paid, delivered invoice with a credited return").toBe(true);
+    expect(demoTi.some((t) => t.paymentStatus === "UNPAID" && t.creditNotes.some((c) => c.status === "PENDING_APPROVAL")), "an unpaid invoice with a credit note awaiting approval").toBe(true);
+    expect(await prisma.systemSetting.findUnique({ where: { key: "features.salesInvoicing" } }), "module switch put back after seeding").toBeNull();
     expect(await prisma.pettyCashTransaction.count()).toBeGreaterThan(0);
     expect(await prisma.bankStatementLine.count()).toBeGreaterThan(0);
 

@@ -4,6 +4,27 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 
 ## [Unreleased]
 
+### Added — tax invoices behind a module switch (not deployed; switched off)
+- Tax invoices from a sales order or by converting a proforma; FTA print (PDF); money received on the proformas is applied automatically; free advances can be applied; receipts can be recorded against an invoice (TD-045).
+- Delivery notes: only for a fully paid tax invoice; partial dispatch; stock out with COGS; PDF gate pass (TD-048).
+- Sales returns (approval by Owner/Manager, receipt with condition, stock back at cost) and tax credit notes (return-based, or adjustments with approval); C7 treatment is a setting (TD-049).
+- Sales order reservation expiry (nightly job, extension by Owner/Manager, dashboard warning), off until the client confirms C2 (TD-050).
+- VAT return in the FTA VAT 201 layout with output/input registers and a check against the VAT accounts; Excel accountant pack (TD-051).
+- Reports hub with the 16 spec reports: new purchase, sales, profit per invoice, bank, expense, lot-wise stock / valuation, reservations and customer advances reports, each with filters, Excel and print (TD-052).
+- Demo data now includes invoices, delivery, a return with its credit note and a pending credit note (TD-053).
+- VAT box 1 split by emirate (customer emirate, else the company's) (TD-054); customer 360 shows invoices, deliveries, returns and credit notes (TD-055).
+- Company logo and stamp upload (Company settings), printed on every PDF; petty cash receipt photo / PDF attachment (TD-056).
+- Settings → System → Modules: tax invoicing stays off until the client confirms the VAT method (C4).
+- VAT rounding per line or per document, and the price display on printed tax invoices, are settings (TD-046, TD-047).
+
+### Added — business policy settings (Phase 0–1, not deployed)
+- Settings → System: every business rule in one place, grouped, with help text; changes are audited. The core rules moved here from Company settings. New settings are added through a registry (TD-039); each one is off / unchanged by default.
+- Credit purchases: suppliers can be marked "gives credit" with credit days; a setting lets their goods be collected and received before payment (TD-040). Supplier invoice due dates default from credit days.
+- Supplier invoice tolerance above the PO: above it only Owner/Manager can post, with a reason (TD-041).
+- Landed cost categories can have their own allocation basis, e.g. customs duty by value (TD-042).
+- Bank charges on supplier payments can be expensed on the payment voucher instead of a landed cost bill (TD-043).
+- Cash refund limit with an Owner-only permission to go above it (TD-044).
+
 ### Added — accounts, receipts and jobs (not deployed)
 - Bank accounts (each with its own ledger account); supplier payments and customer receipts choose the bank.
 - Manual journal vouchers with reversal; trial balance, profit & loss and balance sheet.

@@ -248,6 +248,7 @@ describe("landed cost (R3)", () => {
   });
 
   it("records expenses separately and allocates by SQM to the PO's lots", async () => {
+    const clearingBefore = await accountBalance(prisma, "LANDED_COST_CLEARING"); // other tests may leave bills unallocated
     const { owner, acct, po, item } = await approvedPo("IMPORT", { sqm: "30" });
     const store = await ctxFor("storekeeper");
     await payInFull(acct, po.id);
@@ -290,7 +291,7 @@ describe("landed cost (R3)", () => {
     const lots = await prisma.lot.findMany({ where: { purchaseOrderId: po.id }, orderBy: { createdAt: "asc" }, include: { allocations: true } });
     expect(lots.map((l) => D(l.costPerSqm).toString())).toEqual(["130", "130"]); // 100 + 900/30
     expect(lots.map((l) => D(l.allocations[0].allocatedAmount).toString())).toEqual(["600", "300"]);
-    expect(await accountBalance(prisma, "LANDED_COST_CLEARING")).toEqual(D(0));
+    expect((await accountBalance(prisma, "LANDED_COST_CLEARING")).minus(clearingBefore).toString()).toBe("0");
   });
 
   it("manual override needs permission, a reason, and must add up", async () => {

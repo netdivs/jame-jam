@@ -6,7 +6,8 @@ import { Card, DefList, Empty, LinkButton, PageHeader, Stat, Table, FileButton }
 import { requirePermission } from "@/server/auth";
 import { PaidFromSelect } from "@/components/paid-from";
 import { D, prisma } from "@/server/core";
-import { isPaidAndVerified } from "@/server/purchase/orders";
+import { isPaidAndVerified, needsPaymentBeforeReceipt } from "@/server/purchase/orders";
+import { getSetting } from "@/server/settings";
 import { fmtAED, fmtDate, fmtDateTime, fmtMoney, fmtSqm, titleCase, todayIso } from "@/lib/format";
 import {
   cancelPoAction,
@@ -59,10 +60,13 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
     prisma.taxCode.findMany({ where: { active: true }, orderBy: { code: "asc" } }),
     prisma.companySetting.findUniqueOrThrow({ where: { id: 1 } }),
   ]);
+  const [receivePolicy, bankChargesTreatment] = await Promise.all([getSetting("purchase.receiveBeforePayment"), getSetting("purchase.bankChargesTreatment")]);
 
   const live = ["APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CLOSED"].includes(po.status);
   const receivable = ["APPROVED", "PARTIALLY_RECEIVED"].includes(po.status);
-  const paidOk = isPaidAndVerified(po);
+  // Credit purchases (TD-040): the setting may let this supplier's goods in before payment.
+  const onCredit = !needsPaymentBeforeReceipt(po, receivePolicy);
+  const paidOk = onCredit || isPaidAndVerified(po);
   const isImport = po.supplier.supplierType === "IMPORT";
   const ordered = po.items.reduce((a, i) => a.plus(i.sqm), D(0));
   const received = po.items.reduce((a, i) => a.plus(i.receivedSqm), D(0));
@@ -75,6 +79,7 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
   let next = "";
   if (po.status === "DRAFT") next = po.rejectionNote ? `Rejected: “${po.rejectionNote}”. Edit and submit again.` : "Draft — edit if needed, then submit for approval.";
   else if (po.status === "PENDING_APPROVAL") next = "Waiting for approval by Owner or Manager.";
+  else if (receivable && onCredit) next = isImport && !collected ? "Credit purchase — move the shipment to Collected, then receive the goods (GRN). Pay by the invoice due date." : "Credit purchase — receive the goods (GRN), post the supplier invoice, and pay by its due date.";
   else if (receivable && D(po.paidAmount).lt(po.total)) next = `Pay the supplier 100% (AED ${fmtMoney(D(po.total).minus(po.paidAmount))} outstanding). Collection and GRN stay blocked until then.`;
   else if (receivable && !po.paymentVerifiedAt) next = "Paid in full — verify the payment to unblock collection and GRN.";
   else if (receivable && isImport && !collected) next = "Payment verified. Move the shipment to Collected, then receive the goods (GRN).";
@@ -291,6 +296,8 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
               <FInput label="Amount (AED)" name="amount" inputMode="decimal" required defaultValue={payCap.toFixed(2)} hint={`Up to ${fmtMoney(payCap)}`} />
               <PaidFromSelect />
               <FInput label="Reference" name="reference" placeholder="TT / cheque no." />
+              {bankChargesTreatment === "EXPENSE" && <FInput label="Bank charges (AED)" name="bankCharges" inputMode="decimal" placeholder="0.00" hint="Bank payments only; expensed, on top of the amount." />}
+
               <div className="flex items-end">
                 <SubmitButton variant="secondary">Record payment</SubmitButton>
               </div>
@@ -515,9 +522,11 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
                 <FSelect
                   label="Allocation basis"
                   name="allocationBasis"
-                  defaultValue={settings.landedCostDefaultBasis}
+                  defaultValue=""
+                  hint={`Default: the category's basis if set, else ${settings.landedCostDefaultBasis.toLowerCase()}.`}
                   options={[
-                    { value: "SQM", label: "SQM (default)" },
+                    { value: "", label: "Default for the category" },
+                    { value: "SQM", label: "SQM" },
                     { value: "VALUE", label: "Purchase value" },
                     { value: "QUANTITY", label: "Quantity (slabs)" },
                   ]}

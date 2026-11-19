@@ -12,8 +12,8 @@ const num = (s: string) => (/^\d+(\.\d+)?$/.test(s.trim()) ? Number(s) : NaN);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) => (Number.isFinite(n) ? n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "—");
 
-export function InvoiceForm({ poId, items, taxes, defaultDate, importSupplier = false }: { poId: string; items: Item[]; taxes: TaxOpt[]; defaultDate: string; importSupplier?: boolean }) {
-  const [head, setHead] = useState({ supplierInvoiceNo: "", date: defaultDate, dueDate: "", refCurrency: "", refAmount: "", refRate: "", notes: "" });
+export function InvoiceForm({ poId, items, taxes, defaultDate, importSupplier = false, creditDays = null, overPoTolerance = null }: { poId: string; items: Item[]; taxes: TaxOpt[]; defaultDate: string; importSupplier?: boolean; creditDays?: number | null; overPoTolerance?: string | null }) {
+  const [head, setHead] = useState({ supplierInvoiceNo: "", date: defaultDate, dueDate: "", refCurrency: "", refAmount: "", refRate: "", notes: "", overPoReason: "" });
   const [lines, setLines] = useState(() => items.map((i) => ({ ...i, include: true, sqm: i.openSqm, unitPrice: i.poPrice, taxReason: "" })));
   const poTax = new Map(items.map((i) => [i.id, i.taxCodeId]));
   const needsReason = (l: { id: string; taxCodeId: string }) => {
@@ -56,7 +56,15 @@ export function InvoiceForm({ poId, items, taxes, defaultDate, importSupplier = 
         <div>
           <L htmlFor="dueDate">Due date</L>
           <input id="dueDate" type="date" className={inputClass} value={head.dueDate} onChange={(e) => setHead({ ...head, dueDate: e.target.value })} />
+          {creditDays !== null && <p className="mt-1 text-xs text-muted">Empty = invoice date + {creditDays} credit days.</p>}
         </div>
+        {overPoTolerance !== null && (
+          <div className="sm:col-span-2 lg:col-span-3">
+            <L htmlFor="overPoReason">Reason if above the PO by more than {overPoTolerance}%</L>
+            <input id="overPoReason" className={inputClass} value={head.overPoReason} onChange={(e) => setHead({ ...head, overPoReason: e.target.value })} maxLength={500} placeholder="e.g. supplier price increase agreed on …" />
+            <p className="mt-1 text-xs text-muted">Only Owner or Manager can post an invoice above the tolerance.</p>
+          </div>
+        )}
         <div>
           <L htmlFor="refCurrency">Original currency (reference)</L>
           <input id="refCurrency" className={inputClass} value={head.refCurrency} onChange={(e) => setHead({ ...head, refCurrency: e.target.value.toUpperCase() })} maxLength={10} placeholder="Never posted" />

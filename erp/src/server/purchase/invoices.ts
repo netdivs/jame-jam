@@ -4,13 +4,18 @@
 //    (remaining stock → Inventory, already-sold part → COGS).
 //  - Reverse charge (imports): VAT is self-assessed (Dr VAT Input / Cr VAT Output) and not owed to the supplier.
 //  - Supplier advances on the PO are knocked off automatically.
+//  - Setting purchase.invoiceOverPoTolerancePct (TD-041): when the PO's invoiced total would exceed the PO total by
+//    more than that %, only a user with purchase.approve may post it, with a reason.
+//  - The due date defaults to invoice date + the supplier's credit days.
 import { z } from "zod";
-import { AppError, Ctx, D, Dec, ZERO, assertCan, audit, inTx, nextDocNumber, rethrowUnique, round2, round4, sum, toDateOnly } from "../core";
+import type { Prisma } from "@prisma/client";
+import { AppError, Ctx, D, Dec, Tx, ZERO, assertCan, audit, can, inTx, nextDocNumber, rethrowUnique, round2, round4, sum, toDateOnly } from "../core";
 import { postJournal } from "../accounting/gl";
 import { revalueLot, revaluationLines, splitAmount } from "../inventory/costing";
 import { dateStr, decimal, optText, parse, reqText } from "../validation";
 import { LIVE, lineAmounts, lockPo, paymentStatusOf, refreshPoStatus } from "./orders";
 import { isStandardPurchaseCode, requireTaxReason } from "../tax-rules";
+import { getSetting } from "../settings";
 
 const optDec = (o: Parameters<typeof decimal>[0]) => z.union([decimal(o), z.literal("").transform(() => undefined)]).optional();
 
@@ -20,6 +25,8 @@ export const invoiceSchema = z.object({
   date: dateStr,
   dueDate: z.union([dateStr, z.literal("")]).optional().transform((v) => v || undefined),
   notes: optText(1000),
+  /** Required when the invoice takes the PO's invoiced total above the tolerance setting. */
+  overPoReason: optText(500),
   refCurrency: optText(10),
   refAmount: optDec({ gt: 0, dp: 2, label: "Reference amount" }),
   refRate: optDec({ gt: 0, dp: 6, label: "Reference rate" }),
@@ -37,6 +44,24 @@ export const invoiceSchema = z.object({
     .min(1, "Add at least one line"),
 });
 export type InvoiceInput = z.input<typeof invoiceSchema>;
+
+const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
+
+/** Tolerance check for invoices above the PO (setting purchase.invoiceOverPoTolerancePct). Returns audit details when over. */
+async function checkOverPo(tx: Tx, ctx: Ctx, po: { id: string; number: string; total: Prisma.Decimal }, total: Dec, reason: string | undefined) {
+  const pct = await getSetting("purchase.invoiceOverPoTolerancePct", tx);
+  if (pct === null) return null;
+  const prior = await tx.supplierInvoice.aggregate({ where: { purchaseOrderId: po.id }, _sum: { total: true } });
+  const invoiced = D(prior._sum.total ?? 0).plus(total);
+  const limit = round2(D(po.total).times(D(100).plus(pct)).div(100));
+  if (invoiced.lte(limit)) return null;
+  const over = { poTotal: D(po.total).toFixed(2), invoicedTotal: invoiced.toFixed(2), tolerancePct: pct, reason };
+  if (!can(ctx, "purchase.approve")) {
+    throw new AppError("FORBIDDEN", `Invoiced total AED ${invoiced.toFixed(2)} is more than ${pct}% above PO ${po.number} (AED ${D(po.total).toFixed(2)}). A user who can approve POs must post this invoice.`);
+  }
+  if (!reason) throw new AppError("VALIDATION", `Invoiced total AED ${invoiced.toFixed(2)} is more than ${pct}% above PO ${po.number} (AED ${D(po.total).toFixed(2)}) — give a reason`, { fields: { overPoReason: "Reason required" } });
+  return over;
+}
 
 export async function postSupplierInvoice(ctx: Ctx, raw: unknown) {
   assertCan(ctx, "purchase.invoice");
@@ -100,7 +125,9 @@ export async function postSupplierInvoice(ctx: Ctx, raw: unknown) {
       const vatTotal = sum(withGrni.map((l) => l.vat));
       const rcVatTotal = sum(withGrni.map((l) => l.rcVat));
       const total = netTotal.plus(vatTotal);
+      const overPo = await checkOverPo(tx, ctx, po, total, input.overPoReason);
       const number = await nextDocNumber(tx, "PUR", date);
+      const dueDate = input.dueDate ? toDateOnly(input.dueDate) : po.supplier.creditDays !== null ? addDays(date, po.supplier.creditDays) : null;
 
       const inv = await tx.supplierInvoice.create({
         data: {
@@ -109,7 +136,7 @@ export async function postSupplierInvoice(ctx: Ctx, raw: unknown) {
           purchaseOrderId: po.id,
           supplierInvoiceNo,
           date,
-          dueDate: input.dueDate ? toDateOnly(input.dueDate) : null,
+          dueDate,
           netTotal,
           vatTotal,
           rcVatTotal,
@@ -196,7 +223,8 @@ export async function postSupplierInvoice(ctx: Ctx, raw: unknown) {
         action: "create",
         entity: "SupplierInvoice",
         entityId: inv.id,
-        after: { number, supplierInvoiceNo, po: po.number, netTotal, vatTotal, rcVatTotal, total, advanceKnockedOff: knock, poStatus: status },
+        after: { number, supplierInvoiceNo, po: po.number, netTotal, vatTotal, rcVatTotal, total, advanceKnockedOff: knock, poStatus: status, dueDate },
+        meta: overPo ? { overPo } : undefined,
       });
       return tx.supplierInvoice.findUniqueOrThrow({ where: { id: inv.id } });
     });

@@ -6,8 +6,9 @@ import { requirePermission } from "@/server/auth";
 import { D } from "@/server/core";
 import { prisma } from "@/server/core";
 import { PI_OPEN, effectivePiStatus } from "@/server/sales/proformas";
-import { fmtAED, fmtDate, fmtDateTime, fmtMoney, fmtSqm } from "@/lib/format";
-import { closePiAction, renewPiAction } from "../../actions";
+import { fmtAED, fmtDate, fmtDateTime, fmtMoney, fmtSqm, todayIso } from "@/lib/format";
+import { closePiAction, createTiAction, renewPiAction } from "../../actions";
+import { salesInvoicingEnabled } from "@/server/sales/invoices";
 import { PiStatus, priceModeLabel } from "../../shared";
 
 export default async function PiDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -21,6 +22,7 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
   if (!pi) notFound();
   const status = effectivePiStatus(pi);
   const settings = await prisma.companySetting.findUniqueOrThrow({ where: { id: 1 } });
+  const invoicing = await salesInvoicingEnabled();
   const renewedBy = pi.renewedById ? await prisma.user.findUnique({ where: { id: pi.renewedById }, select: { name: true } }) : null;
 
   return (
@@ -142,6 +144,16 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
               ))}
             </tbody>
           </Table>
+        </Card>
+      )}
+
+      {invoicing && status === "ACTIVE" && has("sales.edit") && (
+        <Card title="Convert to tax invoice" className="mb-5">
+          <ActionForm action={createTiAction.bind(null, { piId: pi.id })} className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+            <FInput label="Invoice date" name="date" type="date" required defaultValue={todayIso()} />
+            <SubmitButton pendingText="Converting…">Issue tax invoice for this proforma</SubmitButton>
+          </ActionForm>
+          {D(pi.receivedAmount).gt(0) && <p className="mt-2 text-xs text-muted">The {fmtAED(pi.receivedAmount)} received on this proforma is applied to the invoice.</p>}
         </Card>
       )}
 

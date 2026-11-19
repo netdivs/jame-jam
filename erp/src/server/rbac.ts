@@ -43,6 +43,13 @@ export const PERMISSIONS = {
   "sales.renewPi": "Renew an expired proforma invoice",
   "sales.extendReservation": "Extend a sales order's stock reservation",
   "taxCode.change": "Use a tax code other than standard-rated (SR) on a document line",
+  "delivery.view": "View delivery notes",
+  "delivery.create": "Issue delivery notes (release goods for a fully paid tax invoice)",
+  "returns.create": "Raise sales return requests",
+  "returns.approve": "Approve or reject sales returns",
+  "returns.receive": "Record returned goods received back (SQM and condition)",
+  "creditNotes.create": "Create credit notes (return-based, or adjustments that wait for approval)",
+  "creditNotes.approve": "Approve or reject adjustment credit notes",
   // Receipts & accounts
   "receipts.view": "View customer receipts and advances",
   "receipts.create": "Record customer receipts (CR / RV)",
@@ -54,6 +61,7 @@ export const PERMISSIONS = {
   "pdc.manage": "Deposit, clear, bounce, cancel and replace post-dated cheques",
   "refunds.create": "Record refund vouchers (pay back a customer advance, take back a supplier advance)",
   "refunds.cancel": "Cancel a refund voucher (posts a reversal)",
+  "refunds.overLimit": "Pay a customer refund in cash above the cash refund limit (Settings → System)",
   "pettyCash.view": "View petty cash boxes, transactions and the daily cash report",
   "pettyCash.manage": "Record petty cash top-ups and expenses, cancel them, and manage boxes and expense categories",
   "bankRec.manage": "Enter and import bank statements, match them, post bank charges and save reconciliations",
@@ -82,7 +90,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     description: "Runs operations; approves returns and POs",
     // Spec §5: Manager only views payments, receipts, bank and journals.
     permissions: ALL.filter(
-      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage", "refunds.create", "refunds.cancel", "pettyCash.manage", "bankRec.manage", "opening.manage"].includes(p),
+      (p) => !["settings.edit", "users.manage", "accounts.periodLock", "payments.supplier", "receipts.create", "receipts.cancel", "bank.manage", "journal.post", "pdc.manage", "refunds.create", "refunds.cancel", "refunds.overLimit", "pettyCash.manage", "bankRec.manage", "opening.manage"].includes(p),
     ),
   },
   {
@@ -107,6 +115,8 @@ export const ROLES: { key: string; name: string; description: string; permission
       "payments.supplier",
       "landedCost.edit",
       "sales.view",
+      "delivery.view",
+      "creditNotes.create",
       "taxCode.change",
       "receipts.view",
       "receipts.create",
@@ -130,7 +140,7 @@ export const ROLES: { key: string; name: string; description: string; permission
     name: "Sales Staff",
     description: "Customers, sales orders and invoices",
     // Spec §5: SO / PI / TI create/edit; no cancel, renew, extend or tax code change.
-    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "receipts.view", "receipts.create", "crm.view", "crm.edit"],
+    permissions: ["customers.view", "customers.edit", "products.view", "inventory.view", "sales.view", "sales.edit", "delivery.view", "returns.create", "receipts.view", "receipts.create", "crm.view", "crm.edit"],
   },
   {
     key: "storekeeper",
@@ -145,6 +155,9 @@ export const ROLES: { key: string; name: string; description: string; permission
       "purchase.view",
       "purchase.receive",
       "sales.view",
+      "delivery.view",
+      "delivery.create",
+      "returns.receive",
     ],
   },
 ];

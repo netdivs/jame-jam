@@ -20,4 +20,5 @@ export type PrintDoc = {
   fileName: string;
 };
 
-export type CompanyHeader = { name: string; lines: string[]; bank?: string[] };
+export type CompanyImage = { data: Buffer; format: "png" | "jpg" };
+export type CompanyHeader = { name: string; lines: string[]; bank?: string[]; logo?: CompanyImage | null; stamp?: CompanyImage | null };

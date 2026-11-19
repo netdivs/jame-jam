@@ -60,7 +60,7 @@ None.
 | `GoodsReceipt`, `SupplierInvoice`, `SupplierPayment` | `create` |
 | `LandedCostExpense` | `create`, `allocate`, `allocateOverride` |
 
-Required, not yet covered: failed logins, logout, user permission overrides (the `UserPermission` table exists and is read by `loadPermissions`, but no service or screen writes it yet), tax code changes, and all Planned modules (sales, receipts, PDC, DN, returns, CN).
+Since 18–20 Nov 2026 also audited: failed logins and logout with the client IP (TS-02), user permission overrides (T1-01), system settings and core rules (TD-039), tax invoices, advance allocations, delivery notes, return requests (create, approve/reject, receive), credit notes (create, approve/reject), reservation extension and expiry. Tax code changes are recorded with their reason on the document line and in the document's create/update audit row.
 
 ## 11. Implementation status
 

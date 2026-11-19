@@ -5,7 +5,7 @@ import { Badge, Card, DefList, PageHeader, Table, FileButton } from "@/component
 import { requirePermission } from "@/server/auth";
 import { D, prisma } from "@/server/core";
 import { fmtAED, fmtDate, fmtDateTime, fmtMoney, todayIso } from "@/lib/format";
-import { cancelPettyAction } from "../actions";
+import { attachReceiptAction, cancelPettyAction } from "../actions";
 
 export default async function PettyDetail({ params }: { params: Promise<{ id: string }> }) {
   const user = await requirePermission("pettyCash.view");
@@ -71,6 +71,24 @@ export default async function PettyDetail({ params }: { params: Promise<{ id: st
             </Table>
           </Card>
         ))}
+      {!topUp && (
+        <Card title="Receipt" className="mb-5">
+          {t.attachmentFileId ? (
+            <a href={`/api/files/${t.attachmentFileId}`} target="_blank" rel="noopener" className="text-sm font-medium text-primary hover:underline">Open the attached receipt</a>
+          ) : (
+            <p className="text-sm text-muted">No receipt attached.</p>
+          )}
+          {user.ctx.permissions.has("pettyCash.manage") && (
+            <ActionForm action={attachReceiptAction.bind(null, t.id)} className="mt-3 flex flex-wrap items-end gap-2">
+              <label className="text-xs font-medium">
+                Photo or PDF, up to 2 MB
+                <input type="file" name="file" accept="image/png,image/jpeg,application/pdf" capture="environment" required className="mt-1 block text-sm" aria-label="Receipt file" />
+              </label>
+              <SubmitButton variant="secondary" pendingText="Uploading…">{t.attachmentFileId ? "Replace receipt" : "Attach receipt"}</SubmitButton>
+            </ActionForm>
+          )}
+        </Card>
+      )}
       {t.status === "POSTED" && user.ctx.permissions.has("pettyCash.manage") && (
         <Card title="Cancel this transaction" className="mb-5">
           <ActionForm action={cancelPettyAction.bind(null, t.id)} className="grid gap-4 sm:grid-cols-[180px_1fr_auto] sm:items-end">

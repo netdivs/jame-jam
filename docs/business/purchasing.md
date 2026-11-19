@@ -37,7 +37,8 @@ Payment is tracked separately: `PaymentStatus` `UNPAID` / `PARTIAL` / `PAID` on 
 - Purchase prices are VAT-exclusive. Line net = round2(SQM × unit price); VAT = round2(net × rate / 100). Reverse charge (RC) VAT is not payable to the supplier (`rcVatTotal`). PO `total` = net + supplier VAT.
   Example: 120.5000 SQM × AED 85.0000 = 10,242.50 net; SR 5% = 512.125 → 512.13; total 10,754.63.
 - **Payment cap (TD-011):** a PO can be paid at most max(PO total, posted supplier-invoice total) − already paid.
-- **100% before collection/GRN (BD-11, C1):** GRN is blocked until `paidAmount ≥ total` **and** the payment is verified. Verification is allowed only at 100%.
+- **100% before collection/GRN (BD-11, C1):** GRN is blocked until `paidAmount ≥ total` **and** the payment is verified. Verification is allowed only at 100%. This is the default of setting `purchase.receiveBeforePayment`; a business may allow credit suppliers (or all suppliers) to deliver first (TD-040, [settings](settings.md)).
+- **Invoice above the PO:** optional tolerance setting; above it only Owner/Manager with a reason (TD-041).
 - GRN SQM per PO line ≤ open SQM (ordered − received). Lots are valued at the PO unit price.
 - Supplier invoice number is unique per supplier (DB unique index + check). Invoiced SQM ≤ received − already invoiced.
 - **GRNI (TD-009):** the invoice clears GRNI at PO price; the difference (variance) goes to that PO line's lots by SQM: remaining stock → Inventory, sold share → COGS.

@@ -1,5 +1,7 @@
 # VAT
 
+**Update 19 Nov 2026:** VAT return (VAT 201 layout), output/input registers, reconciliation to the VAT accounts and the Excel accountant pack are built — `erp/src/server/accounting/vat-report.ts`, `/accounts/vat`, TD-051. Sales VAT appears once tax invoicing is switched on (TD-045).
+
 Purpose: UAE VAT handling — tax codes, input and output VAT, reverse charge on imports, VAT-inclusive pricing, and the reports and export pack the external accountant uses.
 
 **Implementation status:** Partial. Tax codes and input VAT / reverse charge on purchases Done (Steps 1 and 4). Output VAT on sales Planned (Step 5, Blocked by C4). VAT reports and export pack Planned (Step 9).

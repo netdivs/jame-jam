@@ -130,6 +130,36 @@ enum AllocationBasis {
   QUANTITY
 }
 
+enum FileKind {
+  LOGO
+  STAMP
+  PETTY_RECEIPT
+}
+
+/// An uploaded file, kept in the database (TD-056): small images / PDFs, covered by the database backup.
+model StoredFile {
+  id          String   @id @default(cuid())
+  kind        FileKind
+  fileName    String
+  mimeType    String
+  size        Int
+  sha256      String
+  data        Bytes
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([kind])
+}
+
+/// Business policy settings (TD-039): one row per key from the registry in src/server/settings/registry.ts.
+/// A key with no row uses the registry default, so a new setting needs no data migration.
+model SystemSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?
+}
+
 /// Single row (id = 1). Never hardcode these values in code.
 model CompanySetting {
   id                     Int             @id @default(1)
@@ -154,6 +184,9 @@ model CompanySetting {
   poApprovalThreshold    Decimal         @default(0) @db.Decimal(18, 2)
   landedCostDefaultBasis AllocationBasis @default(SQM)
   pdcReminderDays        Int             @default(7)
+  /// Printed on documents (TD-056). StoredFile ids.
+  logoFileId             String?
+  stampFileId            String?
   updatedAt              DateTime        @updatedAt
 }
 
@@ -299,6 +332,7 @@ model TaxCode {
   soItems         SalesOrderItem[]
   piItems         ProformaInvoiceItem[]
   pettyCash       PettyCashTransaction[]
+  tiItems         TaxInvoiceItem[]
 }
 
 // ───────────────────────────── Masters ─────────────────────────────
@@ -316,36 +350,54 @@ model Warehouse {
   receipts  GoodsReceipt[]
 }
 
+/// UAE emirates, for the VAT return box 1 split (place of supply).
+enum Emirate {
+  ABU_DHABI
+  DUBAI
+  SHARJAH
+  AJMAN
+  UMM_AL_QUWAIN
+  RAS_AL_KHAIMAH
+  FUJAIRAH
+}
+
 model Customer {
-  id               String            @id @default(cuid())
-  code             String            @unique
-  name             String
-  contactPerson    String?
-  mobile           String?
-  email            String?
-  address          String?
-  trn              String?
-  creditEnabled    Boolean           @default(false)
-  creditLimit      Decimal           @default(0) @db.Decimal(18, 2)
-  paymentTermsDays Int               @default(0)
-  notes            String?
-  active           Boolean           @default(true)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  salesOrders      SalesOrder[]
-  proformas        ProformaInvoice[]
-  receipts         CustomerReceipt[]
-  cheques          Cheque[]
-  refunds          Refund[]
+  id                 String              @id @default(cuid())
+  code               String              @unique
+  name               String
+  contactPerson      String?
+  mobile             String?
+  email              String?
+  address            String?
+  trn                String?
+  creditEnabled      Boolean             @default(false)
+  creditLimit        Decimal             @default(0) @db.Decimal(18, 2)
+  paymentTermsDays   Int                 @default(0)
+  notes              String?
+  active             Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  salesOrders        SalesOrder[]
+  proformas          ProformaInvoice[]
+  receipts           CustomerReceipt[]
+  cheques            Cheque[]
+  refunds            Refund[]
   /// The lead this customer was converted from (CRM).
-  leadId           String?           @unique
-  lead             Lead?             @relation("LeadCustomer", fields: [leadId], references: [id])
-  contacts         CustomerContact[]
-  convertedLeads   Lead[]            @relation("LeadConvertedTo")
-  opportunities    Opportunity[]
-  interactions     CrmInteraction[]
-  followUps        CrmFollowUp[]
-  openingItems     OpeningItem[]
+  leadId             String?             @unique
+  lead               Lead?               @relation("LeadCustomer", fields: [leadId], references: [id])
+  contacts           CustomerContact[]
+  convertedLeads     Lead[]              @relation("LeadConvertedTo")
+  opportunities      Opportunity[]
+  interactions       CrmInteraction[]
+  followUps          CrmFollowUp[]
+  openingItems       OpeningItem[]
+  taxInvoices        TaxInvoice[]
+  invoiceAllocations InvoiceAllocation[]
+  deliveryNotes      DeliveryNote[]
+  returnRequests     ReturnRequest[]
+  creditNotes        CreditNote[]
+  /// Where supplies to this customer are made (VAT box 1); empty = the company's emirate.
+  emirate            Emirate?
 }
 
 enum SupplierType {
@@ -364,6 +416,10 @@ model Supplier {
   address       String?
   trn           String?
   notes         String?
+  /// Supplier gives credit: with setting purchase.receiveBeforePayment = CREDIT_SUPPLIERS goods may be received before payment.
+  creditAllowed Boolean                   @default(false)
+  /// Payment terms in days; fills a supplier invoice's due date when none is entered.
+  creditDays    Int?
   active        Boolean                   @default(true)
   createdAt     DateTime                  @default(now())
   updatedAt     DateTime                  @updatedAt
@@ -405,16 +461,20 @@ model Product {
   soItems          SalesOrderItem[]
   piItems          ProformaInvoiceItem[]
   leads            Lead[]
+  tiItems          TaxInvoiceItem[]
+  dnItems          DeliveryNoteItem[]
 }
 
 model LandedCostCategory {
-  id        String              @id @default(cuid())
-  name      String              @unique
-  accountId String?
-  system    Boolean             @default(false)
-  active    Boolean             @default(true)
-  createdAt DateTime            @default(now())
-  expenses  LandedCostExpense[]
+  id           String              @id @default(cuid())
+  name         String              @unique
+  accountId    String?
+  /// Allocation basis for bills of this category; empty = the company default (Settings → System).
+  defaultBasis AllocationBasis?
+  system       Boolean             @default(false)
+  active       Boolean             @default(true)
+  createdAt    DateTime            @default(now())
+  expenses     LandedCostExpense[]
 }
 
 // ───────────────────────────── Inventory ─────────────────────────────
@@ -538,6 +598,8 @@ model StockBalance {
   reservations StockReservation[]
   movements    StockMovement[]
   soItems      SalesOrderItem[]
+
+  dnItems DeliveryNoteItem[]
 
   @@index([productId])
   @@index([lotId])
@@ -894,6 +956,8 @@ model SupplierPayment {
   toAdvance           Decimal            @default(0) @db.Decimal(18, 2)
   /// Part applied to posted supplier invoices / bills.
   toPayable           Decimal            @default(0) @db.Decimal(18, 2)
+  /// Bank charges on this payment, expensed (setting purchase.bankChargesTreatment = EXPENSE). Paid on top of amount.
+  bankCharges         Decimal            @default(0) @db.Decimal(18, 2)
   createdById         String?
   createdAt           DateTime           @default(now())
 
@@ -1007,6 +1071,10 @@ model SalesOrder {
   opportunityId        String?           @unique
   opportunity          Opportunity?      @relation(fields: [opportunityId], references: [id])
 
+  taxInvoices TaxInvoice[]
+
+  deliveryNotes DeliveryNote[]
+
   @@index([customerId])
   @@index([status])
 }
@@ -1041,6 +1109,8 @@ model SalesOrderItem {
   invoicedSqm    Decimal               @default(0) @db.Decimal(18, 4)
   deliveredSqm   Decimal               @default(0) @db.Decimal(18, 4)
   piItems        ProformaInvoiceItem[]
+
+  tiItems TaxInvoiceItem[]
 
   @@unique([salesOrderId, lineNo])
   @@index([balanceId])
@@ -1092,6 +1162,9 @@ model ProformaInvoice {
   cheques         Cheque[]
   refunds         Refund[]
 
+  taxInvoices        TaxInvoice[]
+  invoiceAllocations InvoiceAllocation[]
+
   @@index([salesOrderId])
   @@index([status, expiryDate])
 }
@@ -1117,6 +1190,277 @@ model ProformaInvoiceItem {
   grossAmount       Decimal         @db.Decimal(18, 2)
 
   @@unique([proformaInvoiceId, lineNo])
+}
+
+/// Tax invoice (spec §3.3.4, T5-06). Only from a sales order (BD-01), directly or by converting a proforma.
+/// Built on the C4 proposal behind setting features.salesInvoicing (off until the client confirms, TD-045).
+/// Never edited or deleted: corrections go through credit notes (Step 7).
+model TaxInvoice {
+  id                String              @id @default(cuid())
+  number            String              @unique
+  salesOrderId      String
+  salesOrder        SalesOrder          @relation(fields: [salesOrderId], references: [id])
+  /// The proforma converted into this invoice, if any.
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice?    @relation(fields: [proformaInvoiceId], references: [id])
+  customerId        String
+  customer          Customer            @relation(fields: [customerId], references: [id])
+  customerName      String
+  customerAddress   String?
+  customerTrn       String?
+  customerMobile    String?
+  /// Place of supply for VAT box 1 (customer's emirate, else the company's) at the time of the invoice.
+  supplyEmirate     Emirate?
+  /// Supplier (our company) details as printed, for FTA (spec §3.3.4).
+  companyName       String
+  companyAddress    String?
+  companyTrn        String?
+  date              DateTime            @db.Date
+  priceMode         PriceMode
+  discount          Decimal             @default(0) @db.Decimal(18, 2)
+  netTotal          Decimal             @db.Decimal(18, 2)
+  vatTotal          Decimal             @db.Decimal(18, 2)
+  total             Decimal             @db.Decimal(18, 2)
+  /// Paid through applied advances / receipts. Paid in full unlocks the delivery note (BD-15).
+  settledAmount     Decimal             @default(0) @db.Decimal(18, 2)
+  /// Credit notes applied to the receivable (the part of a CN that reduced AR). Open = total − settled − credited.
+  creditedAmount    Decimal             @default(0) @db.Decimal(18, 2)
+  paymentStatus     PaymentStatus       @default(UNPAID)
+  notes             String?
+  createdById       String?
+  createdAt         DateTime            @default(now())
+  items             TaxInvoiceItem[]
+  allocations       InvoiceAllocation[]
+
+  deliveryNotes DeliveryNote[]
+
+  returnRequests ReturnRequest[]
+  creditNotes    CreditNote[]
+
+  @@index([customerId])
+  @@index([salesOrderId])
+  @@index([date])
+}
+
+model TaxInvoiceItem {
+  id               String         @id @default(cuid())
+  taxInvoiceId     String
+  taxInvoice       TaxInvoice     @relation(fields: [taxInvoiceId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  salesOrderItemId String
+  salesOrderItem   SalesOrderItem @relation(fields: [salesOrderItemId], references: [id])
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  description      String?
+  sqm              Decimal        @db.Decimal(18, 4)
+  unitPrice        Decimal        @db.Decimal(18, 4)
+  discount         Decimal        @default(0) @db.Decimal(18, 2)
+  headerDiscount   Decimal        @default(0) @db.Decimal(18, 2)
+  taxCodeId        String
+  taxCode          TaxCode        @relation(fields: [taxCodeId], references: [id])
+  taxReason        String?
+  netAmount        Decimal        @db.Decimal(18, 2)
+  vatAmount        Decimal        @db.Decimal(18, 2)
+  grossAmount      Decimal        @db.Decimal(18, 2)
+  /// SQM released by delivery notes (Step 6).
+  deliveredSqm     Decimal        @default(0) @db.Decimal(18, 4)
+  /// Credit notes on this line (incl. VAT); never more than the line total.
+  creditedAmount   Decimal        @default(0) @db.Decimal(18, 2)
+
+  dnItems DeliveryNoteItem[]
+
+  rrItems ReturnRequestItem[]
+  cnItems CreditNoteItem[]
+
+  @@unique([taxInvoiceId, lineNo])
+}
+
+/// Delivery note (spec §3.1.8, T6-03): goods released for a FULLY PAID tax invoice only (BD-15, no override).
+/// Issued and confirmed in one step: stock out (reservation consumed), Dr COGS / Cr Inventory at lot cost.
+/// Partial dispatch allowed; never more than invoiced. Not cancelled: goods coming back go through returns (Step 7).
+model DeliveryNote {
+  id           String             @id @default(cuid())
+  number       String             @unique
+  taxInvoiceId String
+  taxInvoice   TaxInvoice         @relation(fields: [taxInvoiceId], references: [id])
+  salesOrderId String
+  salesOrder   SalesOrder         @relation(fields: [salesOrderId], references: [id])
+  customerId   String
+  customer     Customer           @relation(fields: [customerId], references: [id])
+  customerName String
+  date         DateTime           @db.Date
+  vehicleNo    String?
+  driverName   String?
+  /// Who took the goods (customer's person, or "collected by customer").
+  receivedBy   String?
+  remarks      String?
+  /// Cost of goods released (sum of lines), posted to COGS.
+  costTotal    Decimal            @db.Decimal(18, 2)
+  createdById  String?
+  createdAt    DateTime           @default(now())
+  items        DeliveryNoteItem[]
+
+  @@index([taxInvoiceId])
+  @@index([customerId])
+}
+
+model DeliveryNoteItem {
+  id               String         @id @default(cuid())
+  deliveryNoteId   String
+  deliveryNote     DeliveryNote   @relation(fields: [deliveryNoteId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  taxInvoiceItemId String
+  taxInvoiceItem   TaxInvoiceItem @relation(fields: [taxInvoiceItemId], references: [id])
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  /// The stock bucket released (slab, or lot/block bucket for tiles), from the SO line.
+  balanceId        String
+  balance          StockBalance   @relation(fields: [balanceId], references: [id])
+  sqm              Decimal        @db.Decimal(18, 4)
+  cost             Decimal        @db.Decimal(18, 2)
+
+  @@unique([deliveryNoteId, lineNo])
+}
+
+enum ReturnStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RECEIVED
+  CREDITED
+}
+
+enum ReturnCondition {
+  /// Back into stock, sellable.
+  GOOD
+  /// Back into stock at cost, marked damaged (slab status DAMAGED); written off by a stock adjustment if needed.
+  DAMAGED
+  /// Not accepted back: no stock, not credited.
+  REJECTED
+}
+
+/// Sales return (spec §3.3.8, T7-01, BD-07, BD-09, R4): request → Owner/Manager approval → physical receipt with
+/// condition → stock in (only approved AND received SQM) → return credit note.
+model ReturnRequest {
+  id           String              @id @default(cuid())
+  number       String              @unique
+  taxInvoiceId String
+  taxInvoice   TaxInvoice          @relation(fields: [taxInvoiceId], references: [id])
+  customerId   String
+  customer     Customer            @relation(fields: [customerId], references: [id])
+  customerName String
+  date         DateTime            @db.Date
+  reason       String
+  status       ReturnStatus        @default(PENDING)
+  decidedById  String?
+  decidedAt    DateTime?
+  decisionNote String?
+  receivedById String?
+  receivedAt   DateTime?
+  createdById  String?
+  createdAt    DateTime            @default(now())
+  items        ReturnRequestItem[]
+  creditNote   CreditNote?
+
+  @@index([taxInvoiceId])
+  @@index([status])
+}
+
+model ReturnRequestItem {
+  id               String           @id @default(cuid())
+  returnRequestId  String
+  returnRequest    ReturnRequest    @relation(fields: [returnRequestId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  taxInvoiceItemId String
+  taxInvoiceItem   TaxInvoiceItem   @relation(fields: [taxInvoiceItemId], references: [id])
+  sqm              Decimal          @db.Decimal(18, 4)
+  receivedSqm      Decimal          @default(0) @db.Decimal(18, 4)
+  condition        ReturnCondition?
+  /// Stock value put back (Dr Inventory / Cr COGS), at the delivered cost.
+  value            Decimal          @default(0) @db.Decimal(18, 2)
+
+  @@unique([returnRequestId, lineNo])
+}
+
+enum CreditNoteKind {
+  RETURN
+  ADJUSTMENT
+}
+
+enum CreditNoteStatus {
+  PENDING_APPROVAL
+  POSTED
+  REJECTED
+}
+
+/// Tax credit note (spec §3.3.8, T7-02). Return-based (from a received return; posts at once) or adjustment
+/// (price / billing correction, reason, Owner/Manager approval; never moves stock). Numbered when posted.
+/// Paid invoice: the part above the invoice's open amount becomes customer advance (C7 proposal, setting).
+model CreditNote {
+  id              String           @id @default(cuid())
+  number          String?          @unique
+  kind            CreditNoteKind
+  status          CreditNoteStatus
+  taxInvoiceId    String
+  taxInvoice      TaxInvoice       @relation(fields: [taxInvoiceId], references: [id])
+  returnRequestId String?          @unique
+  returnRequest   ReturnRequest?   @relation(fields: [returnRequestId], references: [id])
+  customerId      String
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  customerName    String
+  customerTrn     String?
+  date            DateTime         @db.Date
+  reason          String
+  netTotal        Decimal          @db.Decimal(18, 2)
+  vatTotal        Decimal          @db.Decimal(18, 2)
+  total           Decimal          @db.Decimal(18, 2)
+  /// Of the total: reduced the receivable / became customer advance.
+  toReceivable    Decimal          @default(0) @db.Decimal(18, 2)
+  toAdvance       Decimal          @default(0) @db.Decimal(18, 2)
+  decidedById     String?
+  decidedAt       DateTime?
+  decisionNote    String?
+  createdById     String?
+  createdAt       DateTime         @default(now())
+  items           CreditNoteItem[]
+
+  @@index([taxInvoiceId])
+  @@index([status])
+}
+
+model CreditNoteItem {
+  id               String         @id @default(cuid())
+  creditNoteId     String
+  creditNote       CreditNote     @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  lineNo           Int
+  taxInvoiceItemId String
+  taxInvoiceItem   TaxInvoiceItem @relation(fields: [taxInvoiceItemId], references: [id])
+  /// Returned SQM (return CN); zero for an adjustment.
+  sqm              Decimal        @default(0) @db.Decimal(18, 4)
+  netAmount        Decimal        @db.Decimal(18, 2)
+  vatAmount        Decimal        @db.Decimal(18, 2)
+  grossAmount      Decimal        @db.Decimal(18, 2)
+
+  @@unique([creditNoteId, lineNo])
+}
+
+/// Customer advance applied to a tax invoice: Dr Customer Advances / Cr AR (T5-07).
+model InvoiceAllocation {
+  id                String           @id @default(cuid())
+  taxInvoiceId      String
+  taxInvoice        TaxInvoice       @relation(fields: [taxInvoiceId], references: [id])
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  /// Set when the advance was held on a proforma (its received amount goes down).
+  proformaInvoiceId String?
+  proformaInvoice   ProformaInvoice? @relation(fields: [proformaInvoiceId], references: [id])
+  date              DateTime         @db.Date
+  amount            Decimal          @db.Decimal(18, 2)
+  createdById       String?
+  createdAt         DateTime         @default(now())
+
+  @@index([taxInvoiceId])
+  @@index([customerId])
 }
 
 // ───────────────────────────── Customer receipts (Step 6) ─────────────────────────────
@@ -1402,6 +1746,9 @@ model PettyCashTransaction {
   cancelledById      String?
   createdById        String?
   createdAt          DateTime         @default(now())
+
+  /// Photo or PDF of the paper receipt (StoredFile id, TD-056).
+  attachmentFileId String?
 
   @@index([pettyCashAccountId, date])
   @@index([categoryId])
