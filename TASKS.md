@@ -41,7 +41,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 | T5-05 | PI service: create from SO only; validity from `piValidityDays`; expire job; renew (`pi.renew`); close/cancel; no GL | High | T5-02 | DONE (job wiring waits for TJ-01) | O | R1 | H R P A |
 | T5-06 | TI service: from SO (or PI); FTA fields; post Dr AR / Cr SALES, Cr VAT_OUTPUT; reservation moves with invoiced qty; partial invoicing | High | T5-02, T5-04 | BUILT behind `features.salesInvoicing` (19 Nov 2026, TD-045); sign-off BLOCKED (C4) | O | D1, D4; backend rejects TI without SO | H R P G A |
 | T5-07 | Customer advance auto knock-off on TI (from PI-referenced receipts) | Med | T6-01 | BUILT with T5-06 (TD-045) | O | Advance applied; payment status updated | H G |
-| T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | PARTIAL: SO + PI screens done; TI screens with T5-06 | K | Mobile usable; mirrors backend errors | HTTP/E2E |
+| T5-08 | Sales UI: SO, PI, TI lists/details/forms; slab picker with available SQM | High | T5-02, T5-05 | DONE (19 Nov 2026): SO, PI, TI screens; TI behind the module switch | K | Mobile usable; mirrors backend errors | HTTP/E2E |
 | T5-09 | `taxCode.change` permission + reason for non-SR codes on sales (and purchase) lines (F12) | Med | T5-01 | DONE (sales TD-019, purchase TD-022) | O | Spec §3.3.5; audited | R P A |
 | T5-10 | Sales permissions in `rbac.ts` (spec §5 matrix) | High | — | DONE | C | Matrix tests per role | P |
 
@@ -49,7 +49,7 @@ Required tests use the shorthand: **H** happy path · **R** rejection/validation
 
 | ID | Task | Pri | Deps | Status | Agent | Acceptance | Tests |
 |---|---|---|---|---|---|---|---|
-| T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | PARTIAL: receipts and advances (with PI link) done; allocation to TIs waits for T5-06 (C4) | O | Payment status = total − allocations | H R P G A |
+| T6-01 | Customer receipts CR/RV, advances, allocation to TIs (manual/FIFO) | High | T5-06 | DONE (19 Nov 2026): receipts and advances; PI advances knocked off on the TI; free advance applied by a user; receipt against a TI (TD-045) | O | Payment status = total − allocations | H R P G A |
 | T6-02 | PDC received/issued with status history and GL (PDC_RECEIVABLE/PAYABLE) | High | T6-01, T8-03 | DONE (received; issued against a PO, a landed cost bill or an opening supplier invoice) | O | R5; PDC counts as payment only when cleared | H R P G A |
 | T6-03 | DN: only when TI fully paid (BD-15); consume reservation, Dr COGS / Cr INVENTORY; partial dispatch | High | T6-01 | BUILT behind `features.salesInvoicing` (19 Nov 2026, TD-048) | O | R10 | H R P G S A |
 | T6-04 | PDC due reminders job + dashboard widget | Med | T6-02, TJ-01 | DONE (dashboard widget + daily pdc-due job; no email/SMS by scope) | O/K | Reminder N days ahead (`pdcReminderDays`) | H |
