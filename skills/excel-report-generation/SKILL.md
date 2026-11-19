@@ -5,7 +5,7 @@ description: Requirements and selection criteria for Excel exports (report expor
 
 # Excel Report Generation
 
-**Status: available for future use** — **no spreadsheet library is installed**; no export or import exists yet (Steps 8, 9, 11 PLANNED). Adding a dependency requires a DECISIONS.md entry and coordinator approval.
+**Status: active for exports** — `exceljs` chosen (TD-036, 19 Nov 2026). `erp/src/server/print/exports.ts` builds sheets from the report dataset functions; `xlsx.ts` writes them; `GET /api/export/<report>` serves them. Imports (T11-02) and the VAT pack (T9-02) are not built yet.
 
 ## Purpose
 Give the client and their external accountant (BD-12) spreadsheets whose figures equal the ERP and GL to the fil, and accept spreadsheet imports safely.

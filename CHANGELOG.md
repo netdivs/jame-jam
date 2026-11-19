@@ -20,6 +20,12 @@ All notable changes. Format based on Keep a Changelog. Dates are in Asia/Dubai t
 - PDC register with filters (direction, status, due this week/month, bounced), register = PDC GL check, dashboard "cheques due" widget, daily `pdc-due` job.
 - Migration `cheques` (additive). Tests: 5 PDC tests (82 in total); Playwright PDC flow (8 in total).
 
+### Added — PDF documents and Excel exports (TX-01, TX-02, T11-05 partial)
+- Libraries (user-approved): `@react-pdf/renderer` 4.9.0 and `exceljs` 4.4.0 (its `uuid` overridden to 11.1.1). TD-035, TD-036.
+- PDF button on PO, GRN, SO, proforma, receipt, refund, PDC, petty cash voucher and statement pages; PV numbers link to the payment voucher PDF. A4, company header and TRN, party snapshot, lines, totals, notes, bank details, signatures, page numbers.
+- Excel button on trial balance, profit & loss, balance sheet, statements, customer/supplier balances, stock summary, PDC register and daily cash report (numeric cells, same figures as the screen).
+- Same permissions as viewing. Tests: 2 Vitest (117 in total), Playwright print/export spec (30 in total).
+
 ### Added — dashboard at a glance (T11-04)
 - Dashboard tiles by permission (sales, cash/bank, receivables, advances, payables, cheques in hand), each linking to its page; phone-friendly; the cheques-due list no longer cuts off on phones; the header shows the business date (Dubai), not the UTC date. Playwright dashboard spec (28 in total).
 

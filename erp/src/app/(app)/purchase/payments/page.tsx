@@ -36,7 +36,7 @@ export default async function PaymentsPage() {
             <tbody>
               {rows.map((p) => (
                 <tr key={p.id}>
-                  <td className="whitespace-nowrap font-mono text-xs">{p.number}</td>
+                  <td className="whitespace-nowrap font-mono text-xs"><a href={`/api/print/pv/${p.id}`} target="_blank" rel="noopener" className="text-primary hover:underline" title="Payment voucher PDF">{p.number}</a></td>
                   <td className="whitespace-nowrap">{fmtDate(p.date)}</td>
                   <td>{p.supplier.name}</td>
                   <td>

@@ -1,8 +1,8 @@
-import { Card, PageHeader, Table } from "@/components/ui";
+import { Card, PageHeader, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { toDateOnly } from "@/server/core";
 import { trialBalance } from "@/server/accounting/reports";
-import { fmtDate, fmtMoney, todayIso } from "@/lib/format";
+import { fmtDate, fmtMoney, todayIso, isoDate } from "@/lib/format";
 import { DateForm, isoOr } from "../report-ui";
 
 export const metadata = { title: "Trial balance" };
@@ -14,6 +14,7 @@ export default async function TrialBalancePage({ searchParams }: { searchParams:
   return (
     <>
       <PageHeader title="Trial balance" subtitle={`As at ${fmtDate(tb.asOf)}`} />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/export/trial-balance?asOf=${isoDate(tb.asOf)}`}>Excel</FileButton></div>
       <DateForm fields={[{ name: "asOf", label: "As at", value: asOf }]} />
       {!tb.balanced && <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger" role="alert">Debits and credits do not agree. Report this to the developer.</div>}
       <Card pad={false}>

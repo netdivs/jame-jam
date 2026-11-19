@@ -5,7 +5,7 @@ description: Requirements and selection criteria for printable PDF documents (PO
 
 # PDF Document Generation
 
-**Status: available for future use** — **no PDF library is installed** and no document is printable yet (audit F7; spec §8 printing is PLANNED, cross-module task in Step 11). Adding a dependency requires a DECISIONS.md entry and coordinator approval.
+**Status: active** — `@react-pdf/renderer` chosen (TD-035, 19 Nov 2026). Builders in `erp/src/server/print/documents.ts` map a stored document to a `PrintDoc`; `pdf.tsx` renders it; `GET /api/print/<type>/<id>` serves it. Add a document type by adding a builder (permission check first) and a PDF button on its page. TI/DN/CN wait for C4/C7.
 
 ## Purpose
 Produce faithful, legally adequate printed documents from stored document data, identical every time they are reprinted.

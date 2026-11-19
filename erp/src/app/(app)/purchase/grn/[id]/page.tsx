@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, DefList, PageHeader, Table } from "@/components/ui";
+import { Card, DefList, PageHeader, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { prisma } from "@/server/core";
 import { fmtDate, fmtMoney, fmtSqm } from "@/lib/format";
@@ -26,6 +26,7 @@ export default async function GrnDetail({ params }: { params: Promise<{ id: stri
   return (
     <>
       <PageHeader title={`Goods receipt ${g.number}`} subtitle={g.purchaseOrder.supplier.name} back={{ href: "/purchase/grn", label: "Goods receipts" }} />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/print/grn/${g.id}`} target="_blank" rel="noopener">PDF</FileButton></div>
       <Card title="Details" className="mb-5">
         <DefList
           items={[

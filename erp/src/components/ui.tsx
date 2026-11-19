@@ -48,6 +48,10 @@ export type BtnVariant = keyof typeof btnVariant;
 export function Button({ variant = "primary", className, ...p }: ComponentProps<"button"> & { variant?: BtnVariant }) {
   return <button className={cx(btnBase, btnVariant[variant], className)} {...p} />;
 }
+/** A plain <a> styled as a button, for files (PDF / Excel) served by API routes rather than pages. */
+export function FileButton({ variant = "secondary", className, ...p }: ComponentProps<"a"> & { variant?: BtnVariant }) {
+  return <a className={cx(btnBase, btnVariant[variant], className)} {...p} />;
+}
 export function LinkButton({ variant = "primary", className, ...p }: ComponentProps<typeof Link> & { variant?: BtnVariant }) {
   return <Link className={cx(btnBase, btnVariant[variant], className)} {...p} />;
 }

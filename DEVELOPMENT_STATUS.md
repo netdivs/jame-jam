@@ -370,6 +370,10 @@ User page → "Permission overrides". Vitest 113/113; Playwright 26/26.
 
 `seedDemoBusiness` (`erp/src/server/demo-business.ts`) runs from the development/demo seed only; production uses `npm run db:seed:base`. Verified on a fresh test DB (all reconciliations) and on the local dev DB through `npx prisma db seed`.
 
+## 6o. PDF documents and Excel exports (TX-01, TX-02 — 19 Nov 2026)
+
+`erp/src/server/print/` (`documents.ts` builders, `pdf.tsx` renderer, `exports.ts` datasets, `xlsx.ts` writer); routes `/api/print/<type>/<id>` and `/api/export/<report>`. TD-035, TD-036. Visual check of a proforma PDF done. Not yet: TI/DN/CN PDFs (C4/C7), logo/stamp upload, Excel imports (T11-02), VAT accountant pack (T9-02, needs C4).
+
 ## 7. Deployment
 
 - **Server:** the aaPanel host (SSH alias `aapanel`). Code is at `/www/wwwroot/jame.netdivs.us`.

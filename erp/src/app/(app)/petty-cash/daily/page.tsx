@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Card, PageHeader, Table } from "@/components/ui";
+import { Card, PageHeader, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { toDateOnly } from "@/server/core";
 import { dailyCashReport } from "@/server/accounting/petty-cash";
@@ -21,6 +21,7 @@ export default async function DailyCashPage({ searchParams }: { searchParams: Pr
   return (
     <>
       <PageHeader title="Daily cash report" subtitle={`Cash in hand and petty cash boxes on ${fmtDate(date)}: opening, every movement with running balance, closing.`} back={{ href: "/petty-cash", label: "Petty cash" }} />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/export/daily-cash?date=${dateStr}`}>Excel</FileButton></div>
       <DateForm fields={[{ name: "date", label: "Date", value: dateStr }]} />
       {report.map((a) => (
         <Card key={a.accountId} title={<span><span className="font-mono text-xs text-muted">{a.code}</span> {a.name}</span>} className="mb-5" pad={false}>

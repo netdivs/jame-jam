@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ChequeDirection, ChequeStatus as Status, Prisma } from "@prisma/client";
-import { Card, Empty, LinkButton, PageHeader, SearchBar, Stat, Table } from "@/components/ui";
+import { Card, Empty, LinkButton, PageHeader, SearchBar, Stat, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { prisma, today } from "@/server/core";
 import { OPEN_RECEIVED, pdcReconciliation } from "@/server/receipts/cheques";
@@ -53,6 +53,7 @@ export default async function PdcRegister({ searchParams }: { searchParams: Prom
           </>
         }
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href="/api/export/pdc">Excel</FileButton></div>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Received, not cleared" value={fmtAED(rec.openReceived)} hint={rec.openReceived.eq(rec.glReceivable) ? "= PDC Receivable ✓" : `GL ${fmtMoney(rec.glReceivable)} — does not agree`} />
         {seeIssued && <Stat label="Issued, not cleared" value={fmtAED(rec.openIssued)} hint={rec.openIssued.eq(rec.glPayable) ? "= PDC Payable ✓" : `GL ${fmtMoney(rec.glPayable)} — does not agree`} />}

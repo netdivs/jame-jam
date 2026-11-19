@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, FInput, SubmitButton } from "@/components/forms";
-import { Badge, Card, DefList, PageHeader, Table } from "@/components/ui";
+import { Badge, Card, DefList, PageHeader, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { D, prisma } from "@/server/core";
 import { fmtAED, fmtDate, fmtDateTime, fmtMoney, todayIso } from "@/lib/format";
@@ -30,6 +30,7 @@ export default async function ReceiptDetail({ params }: { params: Promise<{ id: 
         }
         back={{ href: "/receipts", label: "Customer receipts" }}
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/print/receipt/${r.id}`} target="_blank" rel="noopener">PDF</FileButton></div>
       <Card title="Details" className="mb-5">
         <DefList
           items={[

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Badge, Card, Empty, PageHeader, SearchBar, Table } from "@/components/ui";
+import { Badge, Card, Empty, PageHeader, SearchBar, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { ZERO, prisma } from "@/server/core";
 import { controlCheck, partyBalances, type PartyType } from "@/server/accounting/ledgers";
@@ -26,6 +26,7 @@ export default async function LedgersPage({ searchParams }: { searchParams: Prom
   return (
     <>
       <PageHeader title={type === "CUSTOMER" ? "Customer ledgers" : "Supplier ledgers"} subtitle={type === "CUSTOMER" ? "Positive = the customer owes us; negative = an advance we hold." : "Positive = we owe the supplier; negative = our advance with them."} />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/export/ledgers?type=${type === "CUSTOMER" ? "customer" : "supplier"}`}>Excel</FileButton></div>
       <div className="mb-4 flex flex-wrap gap-2 text-sm">
         <Link href="/accounts/ledgers?type=customer" className={`rounded-md border px-3 py-1.5 ${type === "CUSTOMER" ? "border-primary text-primary" : "border-border"}`}>Customers</Link>
         <Link href="/accounts/ledgers?type=supplier" className={`rounded-md border px-3 py-1.5 ${type === "SUPPLIER" ? "border-primary text-primary" : "border-border"}`}>Suppliers</Link>

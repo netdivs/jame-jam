@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, FInput, SubmitButton } from "@/components/forms";
-import { Badge, Card, DefList, LinkButton, PageHeader, Stat, Table } from "@/components/ui";
+import { Badge, Card, DefList, LinkButton, PageHeader, Stat, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { D } from "@/server/core";
 import { prisma } from "@/server/core";
@@ -44,6 +44,7 @@ export default async function PiDetail({ params }: { params: Promise<{ id: strin
           )
         }
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/print/pi/${pi.id}`} target="_blank" rel="noopener">PDF</FileButton></div>
 
       {status === "EXPIRED" && (
         <div className="mb-5 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger" role="alert">

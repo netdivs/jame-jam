@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ShipmentStatus } from "@prisma/client";
 import { ActionForm, FInput, FSelect, FTextarea, SubmitButton } from "@/components/forms";
-import { Card, DefList, Empty, LinkButton, PageHeader, Stat, Table } from "@/components/ui";
+import { Card, DefList, Empty, LinkButton, PageHeader, Stat, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { PaidFromSelect } from "@/components/paid-from";
 import { D, prisma } from "@/server/core";
@@ -118,6 +118,7 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
           </>
         }
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/print/po/${po.id}`} target="_blank" rel="noopener">PDF</FileButton></div>
 
       {next && <div className="mb-5 rounded-md border border-border bg-info-bg px-3 py-2 text-sm text-fg">{next}</div>}
 
@@ -270,7 +271,7 @@ export default async function PoDetail({ params }: { params: Promise<{ id: strin
             <tbody>
               {po.payments.map((p) => (
                 <tr key={p.id}>
-                  <td className="whitespace-nowrap font-mono text-xs">{p.number}</td>
+                  <td className="whitespace-nowrap font-mono text-xs"><a href={`/api/print/pv/${p.id}`} target="_blank" rel="noopener" className="text-primary hover:underline" title="Payment voucher PDF">{p.number}</a></td>
                   <td className="whitespace-nowrap">{fmtDate(p.date)}</td>
                   <td>{titleCase(p.mode)}</td>
                   <td>{p.reference ?? "—"}</td>

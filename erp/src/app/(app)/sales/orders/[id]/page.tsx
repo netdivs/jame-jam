@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, FInput, FTextarea, SubmitButton } from "@/components/forms";
-import { Card, DefList, Empty, LinkButton, PageHeader, Stat, Table } from "@/components/ui";
+import { Card, DefList, Empty, LinkButton, PageHeader, Stat, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { D, ZERO, prisma } from "@/server/core";
 import { PI_OPEN } from "@/server/sales/proformas";
@@ -52,6 +52,7 @@ export default async function SoDetail({ params }: { params: Promise<{ id: strin
         back={{ href: "/sales/orders", label: "Sales orders" }}
         actions={so.status === "OPEN" && has("sales.edit") && !livePi && <LinkButton href={`/sales/orders/${id}/edit`} variant="secondary">Edit</LinkButton>}
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/print/so/${so.id}`} target="_blank" rel="noopener">PDF</FileButton></div>
 
       {next && <div className="mb-5 rounded-md border border-border bg-info-bg px-3 py-2 text-sm text-fg">{next}</div>}
 

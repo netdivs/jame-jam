@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, DefList, PageHeader, Table } from "@/components/ui";
+import { Card, DefList, PageHeader, Table, FileButton } from "@/components/ui";
 import { PrintButton } from "@/components/print-button";
 import { requirePermission } from "@/server/auth";
 import { D, prisma, toDateOnly } from "@/server/core";
@@ -46,6 +46,7 @@ export default async function StatementPage({ params, searchParams }: { params: 
         back={{ href: `/accounts/ledgers?type=${t}`, label: type === "CUSTOMER" ? "Customer ledgers" : "Supplier ledgers" }}
         actions={<PrintButton />}
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/print/statement/${id}?party=${t}&from=${fromStr}&to=${toStr}`} target="_blank" rel="noopener">PDF</FileButton><FileButton href={`/api/export/statement?party=${t}&id=${id}&from=${fromStr}&to=${toStr}`}>Excel</FileButton></div>
       <DateForm fields={[{ name: "from", label: "From", value: fromStr }, { name: "to", label: "To", value: toStr }]} />
       <div className="mb-5 grid gap-5 lg:grid-cols-2">
         <Card title="Closing position">

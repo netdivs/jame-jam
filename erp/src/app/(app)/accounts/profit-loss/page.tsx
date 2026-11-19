@@ -1,8 +1,8 @@
-import { PageHeader, Stat } from "@/components/ui";
+import { PageHeader, Stat, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { toDateOnly } from "@/server/core";
 import { profitAndLoss } from "@/server/accounting/reports";
-import { fmtAED, fmtDate, todayIso } from "@/lib/format";
+import { fmtAED, fmtDate, todayIso, isoDate } from "@/lib/format";
 import { DateForm, Section, isoOr } from "../report-ui";
 
 export const metadata = { title: "Profit & loss" };
@@ -17,6 +17,7 @@ export default async function ProfitLossPage({ searchParams }: { searchParams: P
   return (
     <>
       <PageHeader title="Profit & loss" subtitle={`${fmtDate(pl.from)} – ${fmtDate(pl.to)}`} />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/export/profit-loss?from=${isoDate(pl.from)}&to=${isoDate(pl.to)}`}>Excel</FileButton></div>
       <DateForm fields={[{ name: "from", label: "From", value: from }, { name: "to", label: "To", value: to }]} />
       <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Stat label="Income" value={fmtAED(pl.totalIncome)} />

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ActionForm, FInput, FSelect, SubmitButton } from "@/components/forms";
-import { Card, DefList, PageHeader, Table } from "@/components/ui";
+import { Card, DefList, PageHeader, Table, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { D, prisma, today } from "@/server/core";
 import { fmtAED, fmtDate, fmtDateTime, fmtMoney, isoDate, titleCase, todayIso } from "@/lib/format";
@@ -39,6 +39,7 @@ export default async function ChequeDetail({ params }: { params: Promise<{ id: s
         }
         back={{ href: "/pdc", label: "Post-dated cheques" }}
       />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/print/pdc/${c.id}`} target="_blank" rel="noopener">PDF</FileButton></div>
       {c.dueDate < today() && ["RECEIVED", "DEPOSITED", "ISSUED"].includes(c.status) && (
         <div className="mb-5 rounded-md border border-warning/30 bg-warning-bg px-3 py-2 text-sm" role="status">The cheque date has passed and it is not cleared yet.</div>
       )}

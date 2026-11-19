@@ -1,8 +1,8 @@
-import { Card, DefList, PageHeader } from "@/components/ui";
+import { Card, DefList, PageHeader, FileButton } from "@/components/ui";
 import { requirePermission } from "@/server/auth";
 import { toDateOnly } from "@/server/core";
 import { balanceSheet } from "@/server/accounting/reports";
-import { fmtAED, fmtDate, todayIso } from "@/lib/format";
+import { fmtAED, fmtDate, todayIso, isoDate } from "@/lib/format";
 import { DateForm, Section, isoOr } from "../report-ui";
 
 export const metadata = { title: "Balance sheet" };
@@ -14,6 +14,7 @@ export default async function BalanceSheetPage({ searchParams }: { searchParams:
   return (
     <>
       <PageHeader title="Balance sheet" subtitle={`As at ${fmtDate(bs.asOf)}`} />
+      <div className="-mt-2 mb-4 flex flex-wrap gap-2 print:hidden"><FileButton href={`/api/export/balance-sheet?asOf=${isoDate(bs.asOf)}`}>Excel</FileButton></div>
       <DateForm fields={[{ name: "asOf", label: "As at", value: asOf }]} note="No year-end closing yet: profit to date is shown as current earnings." />
       {!bs.balanced && <div className="mb-4 rounded-md border border-danger/30 bg-danger-bg px-3 py-2 text-sm text-danger" role="alert">The balance sheet does not balance. Report this to the developer.</div>}
       <div className="grid gap-x-5 lg:grid-cols-2">
