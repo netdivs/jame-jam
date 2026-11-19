@@ -6,7 +6,9 @@ import { requirePermission } from "@/server/auth";
 import { D, ZERO, prisma } from "@/server/core";
 import { PI_OPEN } from "@/server/sales/proformas";
 import { fmtAED, fmtDate, fmtMoney, fmtSqm, titleCase, todayIso } from "@/lib/format";
-import { cancelSoAction, createPiAction, createTiAction } from "../../actions";
+import { cancelSoAction, createPiAction, createTiAction, extendReservationAction } from "../../actions";
+import { getSetting } from "@/server/settings";
+import { reservationValidUntil } from "@/server/sales/reservations";
 import { salesInvoicingEnabled } from "@/server/sales/invoices";
 import { PiStatus, SoStatus, TiPayStatus, priceModeLabel } from "../../shared";
 
@@ -24,6 +26,9 @@ export default async function SoDetail({ params }: { params: Promise<{ id: strin
   });
   if (!so) notFound();
   const invoicing = await salesInvoicingEnabled();
+  const autoExpire = await getSetting("sales.reservationAutoExpire");
+  const days = (await prisma.companySetting.findUniqueOrThrow({ where: { id: 1 } })).soReservationDays;
+  const validUntil = reservationValidUntil(so, days);
   const reservations = await prisma.stockReservation.findMany({ where: { refType: "SALES_ORDER", refId: id } });
   const resById = new Map(reservations.map((r) => [r.id, r]));
 
@@ -231,6 +236,21 @@ export default async function SoDetail({ params }: { params: Promise<{ id: strin
               <SubmitButton pendingText="Issuing…">Issue tax invoice</SubmitButton>
             </div>
           </ActionForm>
+        </Card>
+      )}
+
+      {so.status === "OPEN" && autoExpire && (
+        <Card title="Reservation" className="mb-5">
+          <p className={`text-sm ${validUntil < new Date() ? "font-medium text-danger" : ""}`}>
+            Stock is held until {fmtDate(validUntil)}{so.reservationExpiresAt ? " (extended)" : ""}. After that the nightly job releases it unless the customer has paid an advance on a proforma.
+          </p>
+          {has("sales.extendReservation") && (
+            <ActionForm action={extendReservationAction.bind(null, id)} className="mt-3 grid gap-3 sm:grid-cols-[auto_1fr_auto] sm:items-end">
+              <FInput label="Hold until" name="until" type="date" required defaultValue={todayIso()} />
+              <FInput id="ext-reason" label="Reason" name="reason" placeholder="e.g. customer confirmed by phone" />
+              <SubmitButton variant="secondary" pendingText="Saving…">Extend reservation</SubmitButton>
+            </ActionForm>
+          )}
         </Card>
       )}
 

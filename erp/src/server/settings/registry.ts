@@ -11,7 +11,7 @@ export type SettingGroup = "features" | "vat" | "sales" | "purchase" | "landedCo
 export const SETTING_GROUPS: { key: SettingGroup; title: string; description: string }[] = [
   { key: "features", title: "Modules", description: "Switch whole modules on or off. Modules built on proposals that the client has not confirmed yet stay off until confirmed." },
   { key: "vat", title: "VAT", description: "How VAT is worked out and shown on sales documents." },
-  { key: "sales", title: "Sales", description: "Returns and credit notes." },
+  { key: "sales", title: "Sales", description: "Stock reservations, returns and credit notes." },
   { key: "purchase", title: "Purchasing", description: "When goods may be received and how supplier invoices and payments are checked." },
   { key: "landedCost", title: "Landed cost", description: "How import costs are treated." },
   { key: "refunds", title: "Refunds", description: "Controls on paying money back." },
@@ -54,6 +54,23 @@ export const SETTINGS = {
       { value: "EXCLUSIVE_WITH_INCLUSIVE_REF", label: "Price excl. VAT + inclusive price as reference" },
       { value: "EXCLUSIVE_ONLY", label: "Price excl. VAT only" },
     ],
+  },
+  "sales.reservationAutoExpire": {
+    group: "sales",
+    kind: "bool",
+    label: "Release sales order reservations automatically",
+    help: "Client decision C2 (proposal). When on, the nightly job releases the stock of an open sales order (nothing invoiced) once its reservation validity has passed — the SO date + the reservation days in Core rules, or the date an Owner/Manager extended it to — and marks the SO expired. An order whose proforma holds money or an open cheque is never released (TD-025). Off: reservations stay until the SO is cancelled.",
+    default: false,
+  },
+  "sales.reservationReminderDays": {
+    group: "sales",
+    kind: "int",
+    label: "Warn before a reservation expires (days)",
+    help: "The dashboard lists open sales orders whose reservation ends within this many days.",
+    default: 2,
+    min: 0,
+    max: 30,
+    unit: "days",
   },
   "creditNotes.paidInvoiceTreatment": {
     group: "sales",

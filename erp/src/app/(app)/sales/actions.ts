@@ -9,6 +9,7 @@ import { closeProformaInvoice, createProformaInvoice, renewProformaInvoice } fro
 import { stockOptions, type StockOption } from "@/server/sales/queries";
 import { applyAdvanceToInvoice, createTaxInvoice } from "@/server/sales/invoices";
 import { createDeliveryNote } from "@/server/sales/delivery";
+import { extendReservation } from "@/server/sales/reservations";
 import { createReturnRequest, decideReturnRequest, receiveReturn } from "@/server/sales/returns";
 import { createAdjustmentCreditNote, createReturnCreditNote, decideCreditNote } from "@/server/sales/credit-notes";
 
@@ -216,5 +217,14 @@ export async function decideCnAction(id: string, decision: "APPROVED" | "REJECTE
     return decision === "APPROVED" ? `Credit note ${cn.number} posted` : "Credit note rejected";
   });
   if (r.ok) revalidatePath("/sales", "layout");
+  return r;
+}
+
+export async function extendReservationAction(soId: string, _: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await runAction(async (u) => {
+    await extendReservation(u.ctx, soId, { until: String(fd.get("until") ?? ""), reason: String(fd.get("reason") ?? "") });
+    return "Reservation extended";
+  });
+  if (r.ok) revalidatePath(soPath(soId));
   return r;
 }
